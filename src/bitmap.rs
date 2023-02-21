@@ -1,6 +1,6 @@
 use std::io::{Read, Write};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Bitmap {
     elements_count: usize,
     bytes: Vec<u8>,

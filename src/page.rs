@@ -1,13 +1,14 @@
 use std::{
     io::{Read, Write},
+    fmt::Debug,
     mem, slice,
     time::SystemTime,
 };
 
 use crate::bitmap::Bitmap;
 
-#[derive(Clone)]
-pub(crate) struct Page<T: Clone> {
+#[derive(Clone, Debug)]
+pub(crate) struct Page<T: Clone + Debug> {
     bitmap: Bitmap,
     data: Vec<T>,
     pub handling_time: SystemTime,
@@ -16,27 +17,25 @@ pub(crate) struct Page<T: Clone> {
     pub page_index: usize,
 }
 
-impl<T: Clone> Page<T> {
+impl<T: Clone + Debug> Page<T> {
     pub fn new(page_index: usize, elements_count_on_page: usize) -> Self {
+        let mut data = Vec::with_capacity(elements_count_on_page);
+
+        for i in 0..elements_count_on_page {
+            unsafe {
+                data[i] = mem::zeroed::<T>();
+            }
+        }
+        
         Self {
             page_index,
             elements_count_on_page,
             bitmap: Bitmap::new(elements_count_on_page),
-            data: Vec::with_capacity(elements_count_on_page),
+            data,
             handling_time: SystemTime::now(),
             is_modified: false,
         }
     }
-
-    // pub fn get_handling_time(&self) -> SystemTime {
-    //     self.handling_time
-    // }
-    //
-    // pub fn is_modfied(&self) -> bool {
-    //     self.is_modified
-    // }
-
-
 
     pub fn insert(&mut self, index_on_page: usize, value: T) {
         debug_assert!(index_on_page < self.elements_count_on_page);
@@ -66,8 +65,6 @@ impl<T: Clone> Page<T> {
     }
 
     pub fn write<W: Write>(&self, writer: &mut W) {
-        self.bitmap.write(writer);
-
         let data_as_bytes = unsafe {
             slice::from_raw_parts(
                 self.data.as_slice().as_ptr() as *const u8,
@@ -76,15 +73,16 @@ impl<T: Clone> Page<T> {
         };
 
         writer.write_all(data_as_bytes);
+        
+        self.bitmap.write(writer);
     }
 
     pub fn read<R: Read>(page_index: usize, elements_count_on_page: usize, reader: &mut R) -> Self {
-        let bitmap = Bitmap::read(elements_count_on_page, reader);
-
         let mut buffer = vec![0; elements_count_on_page];
         reader.read_exact(&mut buffer);
-
         let data: &[T] = unsafe { mem::transmute(buffer.as_slice()) };
+
+        let bitmap = Bitmap::read(elements_count_on_page, reader);
 
         Self {
             bitmap,
