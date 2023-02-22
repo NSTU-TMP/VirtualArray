@@ -1,10 +1,10 @@
 use virtual_array::VirtualArray;
 
 fn main() {
-    let mut va = VirtualArray::<u8>::new("test.bin", 20, 1, 20);
+    let mut va = VirtualArray::new("test.bin", 20, 1, 20);
     va.insert_element(0, 10);
     va.insert_element(2, 1);
-    // va.insert_element(20, 1);
     // dbg!(va.get_element(0));
-    // dbg!(va.get_element(1));
+    // dbg!(va.get_element(2));
+    // va.remove_element(2);
 }

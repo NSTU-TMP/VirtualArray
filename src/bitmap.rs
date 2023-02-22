@@ -51,12 +51,13 @@ impl Bitmap {
     }
 
     pub fn write<W: Write>(&self, w: &mut W) {
-        w.write_all(self.bytes.as_slice());
+        w.write_all(self.bytes.as_slice()).unwrap();
     }
 
     pub fn read<R: Read>(elements_count: usize, file: &mut R) -> Self {
         let mut buffer = vec![0; calc_bitmap_byte_size(elements_count)];
         file.read_exact(&mut buffer);
+        buffer.reverse();
 
         Self {
             elements_count,
