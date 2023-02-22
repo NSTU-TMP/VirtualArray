@@ -29,6 +29,8 @@ impl Bitmap {
 
         let (byte_index, bit_index) = self.get_byte_bit_indices(index);
 
+        // dbg!(byte_index, bit_index);
+
         self.bytes[byte_index] = self.bytes[byte_index] | (1 << bit_index);
     }
 
@@ -54,14 +56,17 @@ impl Bitmap {
         w.write_all(self.bytes.as_slice()).unwrap();
     }
 
-    pub fn read<R: Read>(elements_count: usize, file: &mut R) -> Self {
+    pub fn read<R: Read>(elements_count: usize, file: &mut R) -> Option<Self> {
         let mut buffer = vec![0; calc_bitmap_byte_size(elements_count)];
-        file.read_exact(&mut buffer);
-        buffer.reverse();
+        if let Err(_) = file.read_exact(&mut buffer) {
+            return None;
+        }
 
-        Self {
+        // buffer.reverse();
+
+        Some(Self {
             elements_count,
             bytes: buffer,
-        }
+        })
     }
 }

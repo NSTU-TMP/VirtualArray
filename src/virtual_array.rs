@@ -26,15 +26,29 @@ impl VirtualArray {
         buffer_size: usize,
         desired_page_size: usize,
     ) -> Self {
-        let mut file = OpenOptions::new()
+        let path = Path::new(file_name);
+
+
+        let mut file = if !path.exists() {
+            let mut f = OpenOptions::new()
             .create(true)
             .write(true)
             .read(true)
             .open(Path::new(file_name))
             .unwrap();
 
-        file.seek(std::io::SeekFrom::Start(0)).unwrap();
-        file.write_all(b"VM").unwrap();
+            f.seek(std::io::SeekFrom::Start(0)).unwrap();
+            f.write_all(b"VM").unwrap();
+
+            f
+        } else {
+            OpenOptions::new()
+            .write(true)
+            .read(true)
+            .open(Path::new(file_name))
+            .unwrap()
+        };
+
 
         let page_size = if desired_page_size % mem::size_of::<u8>() == 0 {
             desired_page_size
@@ -44,7 +58,7 @@ impl VirtualArray {
 
         let count_of_elements_on_page = page_size / mem::size_of::<u8>();
 
-        dbg!(page_size);
+        // dbg!(page_size);
 
         Self {
             file,
@@ -66,9 +80,14 @@ impl VirtualArray {
             Some(page) => page,
             None => Page::new(page_index, self.count_of_elements_on_page),
         };
+        // print!("1");
+        // dbg!(page.clone());
 
         page.insert(index_on_page, value);
+        // print!("2");
+        // dbg!(page.clone());
         self.insert_page(page);
+
     }
 
     fn get_page_index_by_element_index(&self, element_index: usize) -> usize {
@@ -130,8 +149,10 @@ impl VirtualArray {
             .seek(std::io::SeekFrom::Start(offset as u64))
             .unwrap();
 
-        let page = Page::read(page_index, self.count_of_elements_on_page, &mut self.file);
+        let page = Page::read(page_index, self.count_of_elements_on_page, &mut self.file)?;
         self.insert_page(page.clone());
+        // print!("read\n");
+        // dbg!(page.clone());
 
         Some(page)
     }
@@ -148,7 +169,8 @@ impl VirtualArray {
             .seek(std::io::SeekFrom::Start(offset as u64))
             .unwrap();
 
-        dbg!(page.clone());
+        // print!("save\n");
+        // dbg!(page.clone());
         page.write(&mut self.file);
     }
 
