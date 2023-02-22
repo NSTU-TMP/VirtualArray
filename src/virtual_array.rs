@@ -1,7 +1,7 @@
 use std::{
+    fmt::Debug,
     fs::{File, OpenOptions},
     io::{Seek, Write},
-    fmt::Debug,
     mem,
     path::Path,
 };
@@ -43,16 +43,6 @@ impl<T: Clone + Debug> VirtualArray<T> {
         };
 
         let count_of_elements_on_page = page_size / mem::size_of::<T>();
-
-        // let count_of_pages = array_size / count_of_elements_on_page;
-        // for i in 0..count_of_pages {
-        //     let offset = Self::VM_SIGNATURE_SIZE
-        //         + i * (page_size + calc_bitmap_byte_size(count_of_elements_on_page));
-        //
-        //     file.seek(std::io::SeekFrom::Start(offset as u64)).unwrap();
-        //     let mut buff = vec![0; page_size + calc_bitmap_byte_size(count_of_elements_on_page)];
-        //     file.write_all(&mut buff).unwrap();
-        // }
 
         dbg!(page_size);
 

@@ -28,6 +28,7 @@ impl Bitmap {
         debug_assert!(index < self.elements_count);
 
         let (byte_index, bit_index) = self.get_byte_bit_indices(index);
+
         self.bytes[byte_index] = self.bytes[byte_index] | (1 << bit_index);
     }
 
@@ -54,7 +55,7 @@ impl Bitmap {
     }
 
     pub fn read<R: Read>(elements_count: usize, file: &mut R) -> Self {
-        let mut buffer = vec![0; elements_count];
+        let mut buffer = vec![0; calc_bitmap_byte_size(elements_count)];
         file.read_exact(&mut buffer);
 
         Self {

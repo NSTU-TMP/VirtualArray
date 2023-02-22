@@ -1,6 +1,6 @@
 use std::{
-    io::{Read, Write},
     fmt::Debug,
+    io::{Read, Write},
     mem, slice,
     time::SystemTime,
 };
@@ -26,7 +26,7 @@ impl<T: Clone + Debug> Page<T> {
                 data[i] = mem::zeroed::<T>();
             }
         }
-        
+
         Self {
             page_index,
             elements_count_on_page,
@@ -73,7 +73,7 @@ impl<T: Clone + Debug> Page<T> {
         };
 
         writer.write_all(data_as_bytes);
-        
+
         self.bitmap.write(writer);
     }
 
@@ -81,6 +81,7 @@ impl<T: Clone + Debug> Page<T> {
         let mut buffer = vec![0; elements_count_on_page];
         reader.read_exact(&mut buffer);
         let data: &[T] = unsafe { mem::transmute(buffer.as_slice()) };
+        dbg!(data);
 
         let bitmap = Bitmap::read(elements_count_on_page, reader);
 
