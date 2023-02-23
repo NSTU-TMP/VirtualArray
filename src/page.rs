@@ -1,13 +1,12 @@
 use std::{
     fmt::Debug,
     io::{Read, Write},
-    // mem, slice,
     time::SystemTime,
 };
 
 use crate::bitmap::Bitmap;
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub(crate) struct Page {
     bitmap: Bitmap,
     data: Vec<u8>,

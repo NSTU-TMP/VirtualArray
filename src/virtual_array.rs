@@ -156,7 +156,7 @@ impl VirtualArray {
     }
 
     fn save_page(&mut self, page_index_in_buffer: usize) {
-        let page = self.pages[page_index_in_buffer].clone();
+        let page = self.pages.get(page_index_in_buffer).unwrap();
 
         if !page.is_modified {
             return;
