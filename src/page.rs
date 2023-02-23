@@ -39,14 +39,14 @@ impl Page {
         self.bitmap.set(index_on_page);
     }
 
-    pub fn get(&self, index_on_page: usize) -> Option<u8> {
+    pub fn get(&self, index_on_page: usize) -> Option<&u8> {
         debug_assert!(index_on_page < self.elements_count_on_page);
 
         if !self.bitmap.get(index_on_page) {
             return None;
         }
 
-        Some(self.data[index_on_page].clone())
+        self.data.get(index_on_page)
     }
 
     pub fn remove(&mut self, index_on_page: usize) {

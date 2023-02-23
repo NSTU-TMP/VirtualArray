@@ -56,8 +56,6 @@ impl VirtualArray {
 
         let count_of_elements_on_page = page_size / mem::size_of::<u8>();
 
-        // dbg!(page_size);
-
         Self {
             file,
             buffer_size,
@@ -73,13 +71,14 @@ impl VirtualArray {
 
         let page_index = self.get_page_index_by_element_index(element_index);
         let index_on_page = self.get_element_index_on_page(element_index);
-
-        let mut page = match self.get_page(element_index) {
+        // ???
+        let mut binding = Page::new(page_index, self.count_of_elements_on_page);
+        let page = match self.get_page(element_index) {
             Some(page) => page,
-            None => Page::new(page_index, self.count_of_elements_on_page),
+            None => &mut binding,
         };
         page.insert(index_on_page, value);
-        self.insert_page(page);
+        // self.insert_page(page);
     }
 
     fn get_page_index_by_element_index(&self, element_index: usize) -> usize {
@@ -90,24 +89,26 @@ impl VirtualArray {
         element_index % self.count_of_elements_on_page
     }
 
-    fn insert_page(&mut self, page: Page) {
+    fn insert_page(&mut self, page: Page) -> usize {
         for i in 0..self.pages.len() {
             if self.pages[i].page_index == page.page_index {
                 self.pages[i] = page;
-                return;
+                return i;
             }
         }
 
         self.remove_oldest_page();
         self.pages.push(page);
+        self.pages.len() - 1
     }
 
-    pub fn get_element(&mut self, element_index: usize) -> Option<u8> {
+    pub fn get_element(&mut self, element_index: usize) -> Option<&u8> {
         debug_assert!(element_index < self.array_size);
 
         let element_index_on_page = self.get_element_index_on_page(element_index);
+        let page_index = self.get_page_index_by_element_index(element_index);
 
-        let page = self.get_page(element_index)?;
+        let page = self.get_page(page_index)?;
         page.get(element_index_on_page)
     }
 
@@ -116,37 +117,42 @@ impl VirtualArray {
 
         let page_index = self.get_page_index_by_element_index(element_index);
         let element_index_on_page = self.get_element_index_on_page(element_index);
-
-        let mut page = match self.get_page(element_index) {
+        let mut binding = Page::new(page_index, self.count_of_elements_on_page);
+        let page = match self.get_page(page_index) {
             Some(page) => page,
-            None => Page::new(page_index, self.count_of_elements_on_page),
+            None => &mut binding,
         };
 
         page.remove(element_index_on_page);
-        self.insert_page(page);
+        // self.insert_page(page);
     }
 
-    fn get_page(&mut self, element_index: usize) -> Option<Page> {
-        let page_index = self.get_page_index_by_element_index(element_index);
-
-        match self.get_page_if_in_memory(page_index) {
-            Some(page) => Some(page),
-            None => self.read_page(page_index),
+    fn get_page(&mut self, page_index: usize) -> Option<&mut Page> {
+        if let Some(index) = self.get_page_index_in_memory(page_index) {
+            self.pages.get_mut(index)
+        } else {
+            self.read_page(page_index)
         }
     }
 
-    fn read_page(&mut self, page_index: usize) -> Option<Page> {
+    fn get_page_index_in_memory(&self, page_index: usize) -> Option<usize> {
+        for (index, page) in self.pages.iter().enumerate() {
+            if page.page_index == page_index {
+                return Some(index);
+            }
+        }
+        None
+    }
+
+    fn read_page(&mut self, page_index: usize) -> Option<&mut Page> {
         let offset = self.get_page_offset(page_index);
         self.file
             .seek(std::io::SeekFrom::Start(offset as u64))
             .unwrap();
 
         let page = Page::read(page_index, self.count_of_elements_on_page, &mut self.file)?;
-        self.insert_page(page.clone());
-        // print!("read\n");
-        // dbg!(page.clone());
-
-        Some(page)
+        let s = self.insert_page(page);
+        self.pages.get_mut(s)
     }
 
     fn save_page(&mut self, page_index_in_buffer: usize) {
@@ -161,8 +167,6 @@ impl VirtualArray {
             .seek(std::io::SeekFrom::Start(offset as u64))
             .unwrap();
 
-        // print!("save\n");
-        // dbg!(page.clone());
         page.write(&mut self.file);
     }
 
@@ -195,15 +199,15 @@ impl VirtualArray {
         Some(oldest)
     }
 
-    fn get_page_if_in_memory(&self, page_index: usize) -> Option<Page> {
-        for page in self.pages.iter() {
-            if page.page_index == page_index {
-                return Some(page.clone());
-            }
-        }
+    // fn get_page_if_in_memory(&mut self, page_index: usize) -> Option<&mut Page> {
+    //     for page in self.pages.iter_mut() {
+    //         if page.page_index == page_index {
+    //             return Some(page);
+    //         }
+    //     }
 
-        None
-    }
+    //     None
+    // }
 
     fn get_page_offset(&self, page_index: usize) -> usize {
         let value = Self::VM_SIGNATURE_SIZE
