@@ -1,7 +1,7 @@
 use std::{
     fmt::Debug,
     io::{Read, Write},
-    mem, slice,
+    // mem, slice,
     time::SystemTime,
 };
 
@@ -19,7 +19,6 @@ pub(crate) struct Page {
 
 impl Page {
     pub fn new(page_index: usize, elements_count_on_page: usize) -> Self {
-
         Self {
             page_index,
             elements_count_on_page,
@@ -35,13 +34,9 @@ impl Page {
 
         self.is_modified = true;
         self.handling_time = SystemTime::now();
-        
-        // dbg!(index_on_page);
-        //dbg!(self.clone());
+
         self.data[index_on_page] = value;
         self.bitmap.set(index_on_page);
-        //dbg!(self.clone());
-        // dbg!(index_on_page,self.data.clone(), self.bitmap.clone());
     }
 
     pub fn get(&self, index_on_page: usize) -> Option<u8> {
@@ -51,7 +46,6 @@ impl Page {
             return None;
         }
 
-        // dbg!(self.data[index_on_page].clone());
         Some(self.data[index_on_page].clone())
     }
 
@@ -69,20 +63,20 @@ impl Page {
         self.bitmap.write(writer);
     }
 
-    pub fn read<R: Read>(page_index: usize, elements_count_on_page: usize, reader: &mut R) -> Option<Self> {
+    pub fn read<R: Read>(
+        page_index: usize,
+        elements_count_on_page: usize,
+        reader: &mut R,
+    ) -> Option<Self> {
         let mut buffer = vec![0; elements_count_on_page];
 
         if let Err(_) = reader.read_exact(&mut buffer) {
             return None;
         }
 
-        //buffer.reverse();
-
-        let bitmap = Bitmap::read(elements_count_on_page, reader)?;
-
         Some(Self {
-            bitmap,
             page_index,
+            bitmap: Bitmap::read(elements_count_on_page, reader)?,
             elements_count_on_page,
             handling_time: SystemTime::now(),
             is_modified: false,

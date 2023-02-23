@@ -1,5 +1,5 @@
 mod bitmap;
-mod virtual_array;
 mod page;
+mod virtual_array;
 
 pub use virtual_array::VirtualArray;

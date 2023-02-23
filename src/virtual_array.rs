@@ -1,5 +1,5 @@
 use std::{
-    fmt::Debug,
+    // fmt::Debug,
     fs::{File, OpenOptions},
     io::{Seek, Write},
     mem,
@@ -28,14 +28,13 @@ impl VirtualArray {
     ) -> Self {
         let path = Path::new(file_name);
 
-
-        let mut file = if !path.exists() {
+        let file = if !path.exists() {
             let mut f = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .read(true)
-            .open(Path::new(file_name))
-            .unwrap();
+                .create(true)
+                .write(true)
+                .read(true)
+                .open(Path::new(file_name))
+                .unwrap();
 
             f.seek(std::io::SeekFrom::Start(0)).unwrap();
             f.write_all(b"VM").unwrap();
@@ -43,12 +42,11 @@ impl VirtualArray {
             f
         } else {
             OpenOptions::new()
-            .write(true)
-            .read(true)
-            .open(Path::new(file_name))
-            .unwrap()
+                .write(true)
+                .read(true)
+                .open(Path::new(file_name))
+                .unwrap()
         };
-
 
         let page_size = if desired_page_size % mem::size_of::<u8>() == 0 {
             desired_page_size
@@ -70,7 +68,7 @@ impl VirtualArray {
         }
     }
 
-    pub fn insert_element(&mut self, element_index: usize, value: u8) {
+    pub fn set_element(&mut self, element_index: usize, value: u8) {
         debug_assert!(element_index < self.array_size);
 
         let page_index = self.get_page_index_by_element_index(element_index);
@@ -80,14 +78,8 @@ impl VirtualArray {
             Some(page) => page,
             None => Page::new(page_index, self.count_of_elements_on_page),
         };
-        // print!("1");
-        // dbg!(page.clone());
-
         page.insert(index_on_page, value);
-        // print!("2");
-        // dbg!(page.clone());
         self.insert_page(page);
-
     }
 
     fn get_page_index_by_element_index(&self, element_index: usize) -> usize {
@@ -130,7 +122,7 @@ impl VirtualArray {
             None => Page::new(page_index, self.count_of_elements_on_page),
         };
 
-        // page.remove(element_index_on_page);
+        page.remove(element_index_on_page);
         self.insert_page(page);
     }
 
