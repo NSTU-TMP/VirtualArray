@@ -4,6 +4,7 @@ use std::{
     io::{Read, Seek, Write},
     mem,
     path::Path,
+    sync::Arc,
 };
 
 use crate::{bitmap::calc_bitmap_byte_size, page::Page, BufferStream};
@@ -45,16 +46,12 @@ impl<Storage: BufferStream> VirtualArray<Storage> {
     const VM_SIGNATURE_SIZE: usize = 2 * mem::size_of::<u8>();
 
     pub fn new(
-        storage: &mut Storage,
+        storage: Storage,
         array_size: usize,
         buffer_size: usize,
         desired_page_size: usize,
     ) -> Self {
-        let mut buf = [0, 0u8];
-        storage.read(&mut buf);
-        if 'V' != buf[0] as char || 'M' != buf[1] as char {
-            assert!(false);
-        };
+        // let mut buf = [0, 0u8];
 
         let page_size = if desired_page_size % mem::size_of::<u8>() == 0 {
             desired_page_size
@@ -71,6 +68,17 @@ impl<Storage: BufferStream> VirtualArray<Storage> {
             pages: Vec::with_capacity(buffer_size),
             page_size,
             count_of_elements_on_page,
+        }
+    }
+
+    pub fn verify_virtual_memory_signature(&mut self) -> Option<&mut Self> {
+        let mut buf: [u8; 2] = [0, 0];
+        if let Err(_) = self.storage.read_exact(&mut buf) {
+            None
+        } else if buf[0] != 'V' as u8 || buf[1] != 'M' as u8 {
+            None
+        } else {
+            Some(self)
         }
     }
 

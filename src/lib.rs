@@ -9,5 +9,5 @@ use std::{
 
 pub use crate::virtual_array::VirtualArray;
 
-trait BufferStream: Read + Write + Seek {}
+pub trait BufferStream: Read + Write + Seek {}
 impl BufferStream for File {}
