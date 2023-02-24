@@ -1,51 +1,59 @@
 use std::{
     // fmt::Debug,
     fs::{File, OpenOptions},
-    io::{Seek, Write},
+    io::{Read, Seek, Write},
     mem,
     path::Path,
 };
 
-use crate::{bitmap::calc_bitmap_byte_size, page::Page};
+use crate::{bitmap::calc_bitmap_byte_size, page::Page, BufferStream};
 
-pub struct VirtualArray {
-    file: File,
+pub struct VirtualArray<Storage: BufferStream> {
     pages: Vec<Page>,
     array_size: usize,
     page_size: usize,
     buffer_size: usize,
     count_of_elements_on_page: usize,
+    storage: Storage,
 }
 
-impl VirtualArray {
-    const VM_SIGNATURE_SIZE: usize = 2 * mem::size_of::<u8>();
-
-    pub fn new<'file_name>(
+impl VirtualArray<File> {
+    pub fn from_file_name<'file_name>(
         file_name: &'file_name str,
         array_size: usize,
         buffer_size: usize,
         desired_page_size: usize,
     ) -> Self {
-        let path = Path::new(file_name);
+        let is_exist = Path::new(file_name).exists();
+        let mut file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .read(true)
+            .open(Path::new(file_name))
+            .unwrap();
+        if !is_exist {
+            file.seek(std::io::SeekFrom::Start(0)).unwrap();
+            file.write_all(b"VM").unwrap();
+        }
+        // file.read(buf)
 
-        let file = if !path.exists() {
-            let mut f = OpenOptions::new()
-                .create(true)
-                .write(true)
-                .read(true)
-                .open(Path::new(file_name))
-                .unwrap();
+        Self::new(file, array_size, buffer_size, desired_page_size)
+    }
+}
 
-            f.seek(std::io::SeekFrom::Start(0)).unwrap();
-            f.write_all(b"VM").unwrap();
+impl<Storage: BufferStream> VirtualArray<Storage> {
+    const VM_SIGNATURE_SIZE: usize = 2 * mem::size_of::<u8>();
 
-            f
-        } else {
-            OpenOptions::new()
-                .write(true)
-                .read(true)
-                .open(Path::new(file_name))
-                .unwrap()
+    pub fn new(
+        storage: &mut Storage,
+        array_size: usize,
+        buffer_size: usize,
+        desired_page_size: usize,
+    ) -> Self {
+        let mut buf = [0, 0u8];
+        storage.read(&mut buf);
+        if 'V' != buf[0] as char || 'M' != buf[1] as char {
+            assert!(false);
         };
 
         let page_size = if desired_page_size % mem::size_of::<u8>() == 0 {
@@ -57,7 +65,7 @@ impl VirtualArray {
         let count_of_elements_on_page = page_size / mem::size_of::<u8>();
 
         Self {
-            file,
+            storage,
             buffer_size,
             array_size,
             pages: Vec::with_capacity(buffer_size),
@@ -146,11 +154,15 @@ impl VirtualArray {
 
     fn read_page(&mut self, page_index: usize) -> Option<&mut Page> {
         let offset = self.get_page_offset(page_index);
-        self.file
+        self.storage
             .seek(std::io::SeekFrom::Start(offset as u64))
             .unwrap();
 
-        let page = Page::read(page_index, self.count_of_elements_on_page, &mut self.file)?;
+        let page = Page::read(
+            page_index,
+            self.count_of_elements_on_page,
+            &mut self.storage,
+        )?;
         let s = self.insert_page(page);
         self.pages.get_mut(s)
     }
@@ -163,11 +175,11 @@ impl VirtualArray {
         }
 
         let offset = self.get_page_offset(page.page_index);
-        self.file
+        self.storage
             .seek(std::io::SeekFrom::Start(offset as u64))
             .unwrap();
 
-        page.write(&mut self.file);
+        page.write(&mut self.storage);
     }
 
     fn remove_oldest_page(&mut self) {
@@ -199,24 +211,15 @@ impl VirtualArray {
         Some(oldest)
     }
 
-    // fn get_page_if_in_memory(&mut self, page_index: usize) -> Option<&mut Page> {
-    //     for page in self.pages.iter_mut() {
-    //         if page.page_index == page_index {
-    //             return Some(page);
-    //         }
-    //     }
-
-    //     None
-    // }
-
     fn get_page_offset(&self, page_index: usize) -> usize {
         let value = Self::VM_SIGNATURE_SIZE
             + page_index * (self.page_size + calc_bitmap_byte_size(self.count_of_elements_on_page));
         value
     }
 }
+// impl<Storage: BufferStream> VirtualArray<Storage> {
 
-impl Drop for VirtualArray {
+impl<Storage: BufferStream> Drop for VirtualArray<Storage> {
     fn drop(&mut self) {
         for i in 0..self.pages.len() {
             self.save_page(i);
