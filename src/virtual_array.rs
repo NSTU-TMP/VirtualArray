@@ -1,16 +1,18 @@
 use std::{
+    fmt::Debug,
+    // sync::Arc,
     // fmt::Debug,
     fs::{File, OpenOptions},
-    io::{Read, Seek, Write},
+    // io::{Read, Seek, Write},
+    io::{Seek, Write},
     mem,
     path::Path,
-    sync::Arc,
 };
 
 use crate::{bitmap::calc_bitmap_byte_size, page::Page, BufferStream};
 
-pub struct VirtualArray<Storage: BufferStream> {
-    pages: Vec<Page>,
+pub struct VirtualArray<Storage: BufferStream, T: Debug> {
+    pages: Vec<Page<T>>,
     array_size: usize,
     page_size: usize,
     buffer_size: usize,
@@ -18,7 +20,7 @@ pub struct VirtualArray<Storage: BufferStream> {
     storage: Storage,
 }
 
-impl VirtualArray<File> {
+impl<T: Debug> VirtualArray<File, T> {
     pub fn from_file_name<'file_name>(
         file_name: &'file_name str,
         array_size: usize,
@@ -42,7 +44,7 @@ impl VirtualArray<File> {
     }
 }
 
-impl<Storage: BufferStream> VirtualArray<Storage> {
+impl<Storage: BufferStream, T: Debug> VirtualArray<Storage, T> {
     const VM_SIGNATURE_SIZE: usize = 2 * mem::size_of::<u8>();
 
     pub fn new(
@@ -51,8 +53,6 @@ impl<Storage: BufferStream> VirtualArray<Storage> {
         buffer_size: usize,
         desired_page_size: usize,
     ) -> Self {
-        // let mut buf = [0, 0u8];
-
         let page_size = if desired_page_size % mem::size_of::<u8>() == 0 {
             desired_page_size
         } else {
@@ -82,12 +82,12 @@ impl<Storage: BufferStream> VirtualArray<Storage> {
         }
     }
 
-    pub fn set_element(&mut self, element_index: usize, value: u8) {
+    pub fn set_element(&mut self, element_index: usize, value: T) {
         debug_assert!(element_index < self.array_size);
 
         let page_index = self.get_page_index_by_element_index(element_index);
         let index_on_page = self.get_element_index_on_page(element_index);
-        // ???
+
         let mut binding = Page::new(page_index, self.count_of_elements_on_page);
         let page = match self.get_page(element_index) {
             Some(page) => page,
@@ -105,7 +105,7 @@ impl<Storage: BufferStream> VirtualArray<Storage> {
         element_index % self.count_of_elements_on_page
     }
 
-    fn insert_page(&mut self, page: Page) -> usize {
+    fn insert_page(&mut self, page: Page<T>) -> usize {
         for i in 0..self.pages.len() {
             if self.pages[i].page_index == page.page_index {
                 self.pages[i] = page;
@@ -118,7 +118,7 @@ impl<Storage: BufferStream> VirtualArray<Storage> {
         self.pages.len() - 1
     }
 
-    pub fn get_element(&mut self, element_index: usize) -> Option<&u8> {
+    pub fn get_element(&mut self, element_index: usize) -> Option<&T> {
         debug_assert!(element_index < self.array_size);
 
         let element_index_on_page = self.get_element_index_on_page(element_index);
@@ -143,7 +143,7 @@ impl<Storage: BufferStream> VirtualArray<Storage> {
         // self.insert_page(page);
     }
 
-    fn get_page(&mut self, page_index: usize) -> Option<&mut Page> {
+    fn get_page(&mut self, page_index: usize) -> Option<&mut Page<T>> {
         if let Some(index) = self.get_page_index_in_memory(page_index) {
             self.pages.get_mut(index)
         } else {
@@ -160,7 +160,7 @@ impl<Storage: BufferStream> VirtualArray<Storage> {
         None
     }
 
-    fn read_page(&mut self, page_index: usize) -> Option<&mut Page> {
+    fn read_page(&mut self, page_index: usize) -> Option<&mut Page<T>> {
         let offset = self.get_page_offset(page_index);
         self.storage
             .seek(std::io::SeekFrom::Start(offset as u64))
@@ -221,13 +221,13 @@ impl<Storage: BufferStream> VirtualArray<Storage> {
 
     fn get_page_offset(&self, page_index: usize) -> usize {
         let value = Self::VM_SIGNATURE_SIZE
-            + page_index * (self.page_size + calc_bitmap_byte_size(self.count_of_elements_on_page));
+            + page_index
+                * (self.page_size + calc_bitmap_byte_size::<T>(self.count_of_elements_on_page));
         value
     }
 }
-// impl<Storage: BufferStream> VirtualArray<Storage> {
 
-impl<Storage: BufferStream> Drop for VirtualArray<Storage> {
+impl<Storage: BufferStream, T: Debug> Drop for VirtualArray<Storage, T> {
     fn drop(&mut self) {
         for i in 0..self.pages.len() {
             self.save_page(i);
