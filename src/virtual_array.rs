@@ -26,7 +26,7 @@ impl<T: Debug> VirtualArray<File, T> {
         array_size: usize,
         buffer_size: usize,
         desired_page_size: usize,
-    ) -> Self {
+    ) -> Option<Self> {
         let is_exist = Path::new(file_name).exists();
         let mut file = OpenOptions::new()
             .create(true)
@@ -37,8 +37,8 @@ impl<T: Debug> VirtualArray<File, T> {
         if !is_exist {
             file.seek(std::io::SeekFrom::Start(0)).unwrap();
             file.write_all(b"VM").unwrap();
+            file.flush().unwrap();
         }
-        // file.read(buf)
 
         Self::new(file, array_size, buffer_size, desired_page_size)
     }
@@ -48,11 +48,11 @@ impl<Storage: BufferStream, T: Debug> VirtualArray<Storage, T> {
     const VM_SIGNATURE_SIZE: usize = 2 * mem::size_of::<u8>();
 
     pub fn new(
-        storage: Storage,
+        mut storage: Storage,
         array_size: usize,
         buffer_size: usize,
         desired_page_size: usize,
-    ) -> Self {
+    ) -> Option<Self> {
         let page_size = if desired_page_size % mem::size_of::<u8>() == 0 {
             desired_page_size
         } else {
@@ -61,24 +61,23 @@ impl<Storage: BufferStream, T: Debug> VirtualArray<Storage, T> {
 
         let count_of_elements_on_page = page_size / mem::size_of::<u8>();
 
-        Self {
-            storage,
-            buffer_size,
-            array_size,
-            pages: Vec::with_capacity(buffer_size),
-            page_size,
-            count_of_elements_on_page,
-        }
-    }
+        storage.seek(std::io::SeekFrom::Start(0)).unwrap();
 
-    pub fn verify_virtual_memory_signature(&mut self) -> Option<&mut Self> {
         let mut buf: [u8; 2] = [0, 0];
-        if let Err(_) = self.storage.read_exact(&mut buf) {
+
+        if let Err(_) = storage.read_exact(&mut buf) {
             None
         } else if buf[0] != 'V' as u8 || buf[1] != 'M' as u8 {
             None
         } else {
-            Some(self)
+            Some(Self {
+                storage,
+                buffer_size,
+                array_size,
+                pages: Vec::with_capacity(buffer_size),
+                page_size,
+                count_of_elements_on_page,
+            })
         }
     }
 
@@ -88,11 +87,8 @@ impl<Storage: BufferStream, T: Debug> VirtualArray<Storage, T> {
         let page_index = self.get_page_index_by_element_index(element_index);
         let index_on_page = self.get_element_index_on_page(element_index);
 
-        let mut binding = Page::new(page_index, self.count_of_elements_on_page);
-        let page = match self.get_page(element_index) {
-            Some(page) => page,
-            None => &mut binding,
-        };
+        // let mut binding = Page::new(page_index, self.count_of_elements_on_page);
+        let page = self.get_page(element_index);
         page.insert(index_on_page, value);
         // self.insert_page(page);
     }
@@ -124,7 +120,7 @@ impl<Storage: BufferStream, T: Debug> VirtualArray<Storage, T> {
         let element_index_on_page = self.get_element_index_on_page(element_index);
         let page_index = self.get_page_index_by_element_index(element_index);
 
-        let page = self.get_page(page_index)?;
+        let page = self.get_page(page_index);
         page.get(element_index_on_page)
     }
 
@@ -133,22 +129,25 @@ impl<Storage: BufferStream, T: Debug> VirtualArray<Storage, T> {
 
         let page_index = self.get_page_index_by_element_index(element_index);
         let element_index_on_page = self.get_element_index_on_page(element_index);
-        let mut binding = Page::new(page_index, self.count_of_elements_on_page);
-        let page = match self.get_page(page_index) {
-            Some(page) => page,
-            None => &mut binding,
-        };
+        // let mut binding = Page::new(page_index, self.count_of_elements_on_page);
+        let page = self.get_page(page_index);
 
         page.remove(element_index_on_page);
-        // self.insert_page(page);
     }
 
-    fn get_page(&mut self, page_index: usize) -> Option<&mut Page<T>> {
+    fn get_page(&mut self, page_index: usize) -> &mut Page<T> {
         if let Some(index) = self.get_page_index_in_memory(page_index) {
-            self.pages.get_mut(index)
-        } else {
-            self.read_page(page_index)
+            return self.pages.get_mut(index).unwrap();
         }
+
+        if let Some(page) = self.read_page(page_index) {
+            page
+        } else {
+            let index = self.insert_page(Page::new(page_index, self.count_of_elements_on_page));
+            self.pages.get_mut(index).unwrap()
+        }
+
+        // self.insert_page(x);
     }
 
     fn get_page_index_in_memory(&self, page_index: usize) -> Option<usize> {
@@ -177,7 +176,6 @@ impl<Storage: BufferStream, T: Debug> VirtualArray<Storage, T> {
 
     fn save_page(&mut self, page_index_in_buffer: usize) {
         let page = self.pages.get(page_index_in_buffer).unwrap();
-
         if !page.is_modified {
             return;
         }
@@ -229,7 +227,10 @@ impl<Storage: BufferStream, T: Debug> VirtualArray<Storage, T> {
 
 impl<Storage: BufferStream, T: Debug> Drop for VirtualArray<Storage, T> {
     fn drop(&mut self) {
+        dbg!("here");
+
         for i in 0..self.pages.len() {
+            dbg!("here");
             self.save_page(i);
         }
     }

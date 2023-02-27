@@ -20,12 +20,10 @@ pub(crate) struct Page<T: Debug> {
 impl<T: Debug> Page<T> {
     pub fn new(page_index: usize, elements_count_on_page: usize) -> Self {
         let mut data = Vec::with_capacity(elements_count_on_page);
-        // println!(elements_count_on_page);
-        dbg!(elements_count_on_page);
+
         for _i in 0..elements_count_on_page {
             unsafe {
                 data.push(mem::zeroed::<T>());
-                // data[i] = mem::zeroed::<T>();
             }
         }
         Self {
@@ -40,11 +38,13 @@ impl<T: Debug> Page<T> {
 
     pub fn insert(&mut self, index_on_page: usize, value: T) {
         debug_assert!(index_on_page < self.elements_count_on_page);
-        dbg!(index_on_page);
+        // dbg!(index_on_page);
         self.is_modified = true;
         self.handling_time = SystemTime::now();
 
+        // dbg!(&value);
         self.data[index_on_page] = value;
+        // dbg!(&self.data[index_on_page]);
 
         self.bitmap.set(index_on_page);
     }
@@ -71,7 +71,7 @@ impl<T: Debug> Page<T> {
         let data_as_bytes = unsafe {
             slice::from_raw_parts(
                 self.data.as_slice().as_ptr() as *const u8,
-                mem::size_of::<Page<T>>(),
+                mem::size_of::<T>() * self.data.len(),
             )
         };
 

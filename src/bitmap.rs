@@ -11,9 +11,9 @@ pub struct Bitmap<T> {
 }
 
 pub(crate) fn calc_bitmap_byte_size<T>(count_of_elements: usize) -> usize {
-    let count_of_bytes = count_of_elements / mem::size_of::<T>();
+    let count_of_bytes = count_of_elements / (mem::size_of::<T>() * 8);
 
-    if count_of_elements % mem::size_of::<T>() != 0 {
+    if count_of_elements % (mem::size_of::<T>() * 8) != 0 {
         count_of_bytes + 1
     } else {
         count_of_bytes
@@ -22,6 +22,8 @@ pub(crate) fn calc_bitmap_byte_size<T>(count_of_elements: usize) -> usize {
 
 impl<T> Bitmap<T> {
     pub fn new(elements_count: usize) -> Self {
+        dbg!(elements_count);
+        dbg!(calc_bitmap_byte_size::<T>(elements_count));
         Self {
             elements_count,
             bytes: vec![0; calc_bitmap_byte_size::<T>(elements_count)],
