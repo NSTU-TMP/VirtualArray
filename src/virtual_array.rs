@@ -4,6 +4,7 @@ use std::{
     io::{Seek, Write},
     mem,
     path::Path,
+    ops::IndexMut,
 };
 
 use crate::{bitmap::calc_bitmap_byte_size, page::Page, BufferStream};
@@ -212,7 +213,7 @@ impl<Storage: BufferStream, T: Debug> VirtualArray<Storage, T> {
     fn get_page_offset(&self, page_index: usize) -> usize {
         let value = Self::VM_SIGNATURE_SIZE
             + page_index
-                * (self.page_size + calc_bitmap_byte_size::<T>(self.count_of_elements_on_page));
+                * (self.page_size + calc_bitmap_byte_size(self.count_of_elements_on_page));
         value
     }
 }

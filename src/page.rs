@@ -9,7 +9,7 @@ use crate::bitmap::Bitmap;
 
 #[derive(Debug)]
 pub(crate) struct Page<T: Debug> {
-    bitmap: Bitmap<T>,
+    bitmap: Bitmap,
     data: Vec<T>,
     pub handling_time: SystemTime,
     pub is_modified: bool,

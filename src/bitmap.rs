@@ -1,32 +1,29 @@
 use std::{
+    fmt::Debug,
     io::{Read, Write},
-    marker::PhantomData,
-    mem,
 };
 
 #[derive(Debug)]
-pub struct Bitmap<T> {
+pub struct Bitmap {
     elements_count: usize,
     bytes: Vec<u8>,
-    data_type: PhantomData<T>,
 }
 
-pub(crate) fn calc_bitmap_byte_size<T>(count_of_elements: usize) -> usize {
-    let count_of_bytes = count_of_elements / (mem::size_of::<T>() * 8);
+pub(crate) fn calc_bitmap_byte_size(count_of_elements: usize) -> usize {
+    let count_of_bytes = count_of_elements / 8;
 
-    if count_of_elements % (mem::size_of::<T>() * 8) != 0 {
+    if count_of_elements % 8 != 0 {
         count_of_bytes + 1
     } else {
         count_of_bytes
     }
 }
 
-impl<T> Bitmap<T> {
+impl Bitmap {
     pub fn new(elements_count: usize) -> Self {
         Self {
             elements_count,
-            bytes: vec![0; calc_bitmap_byte_size::<T>(elements_count)],
-            data_type: PhantomData,
+            bytes: vec![0; calc_bitmap_byte_size(elements_count)],
         }
     }
 
@@ -53,7 +50,8 @@ impl<T> Bitmap<T> {
     }
 
     fn get_byte_bit_indices(&self, index: usize) -> (usize, usize) {
-        (index / (mem::size_of::<T>() * 8), index % (mem::size_of::<T>() * 8))
+        dbg!(&self);
+        (index / 8, index % 8)
     }
 
     pub fn write<W: Write>(&self, writer: &mut W) {
@@ -61,7 +59,7 @@ impl<T> Bitmap<T> {
     }
 
     pub fn read<R: Read>(elements_count: usize, reader: &mut R) -> Option<Self> {
-        let mut buffer = vec![0; calc_bitmap_byte_size::<T>(elements_count)];
+        let mut buffer = vec![0; calc_bitmap_byte_size(elements_count)];
         if let Err(_) = reader.read_exact(&mut buffer) {
             return None;
         }
@@ -69,7 +67,6 @@ impl<T> Bitmap<T> {
         Some(Self {
             elements_count,
             bytes: buffer,
-            data_type: PhantomData,
         })
     }
 }
