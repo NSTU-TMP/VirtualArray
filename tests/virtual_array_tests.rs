@@ -8,17 +8,17 @@ use virtual_array::VirtualArray;
 fn test_add() {
     // let mut va = VirtualArray::new("test.bin", 20, 1, 20);
     let mut va: VirtualArray<std::fs::File, u8> =
-        VirtualArray::from_file_name("test.bin", 20, 1, 20).unwrap();
+        VirtualArray::from_file_name("test_add.bin", 40, 1, 20).unwrap();
     va.set_element(0, 123);
-    va.set_element(2, 99);
+    va.set_element(35, 99);
     assert_eq!(va.get_element(0), Some(&123));
-    assert_eq!(va.get_element(2), Some(&99));
+    assert_eq!(va.get_element(35), Some(&99));
 }
 
 #[test]
 fn test_remove() {
     let mut va: VirtualArray<std::fs::File, u8> =
-        VirtualArray::from_file_name("test.bin", 20, 1, 20).unwrap();
+        VirtualArray::from_file_name("test_remove.bin", 20, 1, 20).unwrap();
     va.set_element(0, 123);
 
     va.remove_element(0);

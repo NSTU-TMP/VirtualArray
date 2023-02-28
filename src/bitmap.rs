@@ -54,7 +54,7 @@ impl<T> Bitmap<T> {
     }
 
     fn get_byte_bit_indices(&self, index: usize) -> (usize, usize) {
-        (index / mem::size_of::<T>(), index % mem::size_of::<T>())
+        (index / (mem::size_of::<T>() * 8), index % (mem::size_of::<T>() * 8))
     }
 
     pub fn write<W: Write>(&self, writer: &mut W) {

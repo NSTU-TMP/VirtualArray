@@ -88,7 +88,7 @@ impl<Storage: BufferStream, T: Debug> VirtualArray<Storage, T> {
         let index_on_page = self.get_element_index_on_page(element_index);
 
         // let mut binding = Page::new(page_index, self.count_of_elements_on_page);
-        let page = self.get_page(element_index);
+        let page = self.get_page(page_index);
         page.insert(index_on_page, value);
         // self.insert_page(page);
     }
@@ -135,18 +135,16 @@ impl<Storage: BufferStream, T: Debug> VirtualArray<Storage, T> {
         page.remove(element_index_on_page);
     }
 
-    fn get_page(&mut self, page_index: usize) -> &mut Page<T> {
+    fn get_page<'a>(&'a mut self, page_index: usize) -> &'a mut Page<T> {
         if let Some(index) = self.get_page_index_in_memory(page_index) {
-            return self.pages.get_mut(index).unwrap();
-        }
-
-        if let Some(page) = self.read_page(page_index) {
-            page
-        } else {
-            let index = self.insert_page(Page::new(page_index, self.count_of_elements_on_page));
             self.pages.get_mut(index).unwrap()
+        } else {
+            self.read_page(page_index)
         }
-
+        //
+        // let index = self.insert_page(Page::new(page_index, self.count_of_elements_on_page));
+        // self.pages.get_mut(index).unwrap()
+        //
         // self.insert_page(x);
     }
 
@@ -159,19 +157,24 @@ impl<Storage: BufferStream, T: Debug> VirtualArray<Storage, T> {
         None
     }
 
-    fn read_page(&mut self, page_index: usize) -> Option<&mut Page<T>> {
+    fn read_page(&mut self, page_index: usize) -> &mut Page<T> {
         let offset = self.get_page_offset(page_index);
         self.storage
             .seek(std::io::SeekFrom::Start(offset as u64))
             .unwrap();
 
-        let page = Page::read(
+        let page = if let Some(page) = Page::read(
             page_index,
             self.count_of_elements_on_page,
             &mut self.storage,
-        )?;
-        let s = self.insert_page(page);
-        self.pages.get_mut(s)
+        ) {
+            page
+        } else {
+            Page::new(page_index, self.count_of_elements_on_page)
+        };
+
+        let index = self.insert_page(page);
+        self.pages.get_mut(index).unwrap()
     }
 
     fn save_page(&mut self, page_index_in_buffer: usize) {
