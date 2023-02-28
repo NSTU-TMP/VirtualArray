@@ -3,7 +3,6 @@ mod page;
 mod virtual_array;
 
 use std::{
-    fmt::Debug,
     fs::File,
     io::{Read, Seek, Write},
 };

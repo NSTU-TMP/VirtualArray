@@ -4,6 +4,7 @@ use std::{
     mem,
 };
 
+#[derive(Debug)]
 pub struct Bitmap<T> {
     elements_count: usize,
     bytes: Vec<u8>,
@@ -22,8 +23,6 @@ pub(crate) fn calc_bitmap_byte_size<T>(count_of_elements: usize) -> usize {
 
 impl<T> Bitmap<T> {
     pub fn new(elements_count: usize) -> Self {
-        dbg!(elements_count);
-        dbg!(calc_bitmap_byte_size::<T>(elements_count));
         Self {
             elements_count,
             bytes: vec![0; calc_bitmap_byte_size::<T>(elements_count)],

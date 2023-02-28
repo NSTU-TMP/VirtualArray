@@ -1,9 +1,6 @@
 use std::{
     fmt::Debug,
-    // sync::Arc,
-    // fmt::Debug,
     fs::{File, OpenOptions},
-    // io::{Read, Seek, Write},
     io::{Seek, Write},
     mem,
     path::Path,
@@ -87,31 +84,8 @@ impl<Storage: BufferStream, T: Debug> VirtualArray<Storage, T> {
         let page_index = self.get_page_index_by_element_index(element_index);
         let index_on_page = self.get_element_index_on_page(element_index);
 
-        // let mut binding = Page::new(page_index, self.count_of_elements_on_page);
         let page = self.get_page(page_index);
-        page.insert(index_on_page, value);
-        // self.insert_page(page);
-    }
-
-    fn get_page_index_by_element_index(&self, element_index: usize) -> usize {
-        element_index / self.count_of_elements_on_page
-    }
-
-    fn get_element_index_on_page(&self, element_index: usize) -> usize {
-        element_index % self.count_of_elements_on_page
-    }
-
-    fn insert_page(&mut self, page: Page<T>) -> usize {
-        for i in 0..self.pages.len() {
-            if self.pages[i].page_index == page.page_index {
-                self.pages[i] = page;
-                return i;
-            }
-        }
-
-        self.remove_oldest_page();
-        self.pages.push(page);
-        self.pages.len() - 1
+        page.set(index_on_page, value);
     }
 
     pub fn get_element(&mut self, element_index: usize) -> Option<&T> {
@@ -129,9 +103,8 @@ impl<Storage: BufferStream, T: Debug> VirtualArray<Storage, T> {
 
         let page_index = self.get_page_index_by_element_index(element_index);
         let element_index_on_page = self.get_element_index_on_page(element_index);
-        // let mut binding = Page::new(page_index, self.count_of_elements_on_page);
-        let page = self.get_page(page_index);
 
+        let page = self.get_page(page_index);
         page.remove(element_index_on_page);
     }
 
@@ -141,11 +114,6 @@ impl<Storage: BufferStream, T: Debug> VirtualArray<Storage, T> {
         } else {
             self.read_page(page_index)
         }
-        //
-        // let index = self.insert_page(Page::new(page_index, self.count_of_elements_on_page));
-        // self.pages.get_mut(index).unwrap()
-        //
-        // self.insert_page(x);
     }
 
     fn get_page_index_in_memory(&self, page_index: usize) -> Option<usize> {
@@ -177,18 +145,17 @@ impl<Storage: BufferStream, T: Debug> VirtualArray<Storage, T> {
         self.pages.get_mut(index).unwrap()
     }
 
-    fn save_page(&mut self, page_index_in_buffer: usize) {
-        let page = self.pages.get(page_index_in_buffer).unwrap();
-        if !page.is_modified {
-            return;
+    fn insert_page(&mut self, page: Page<T>) -> usize {
+        for i in 0..self.pages.len() {
+            if self.pages[i].page_index == page.page_index {
+                self.pages[i] = page;
+                return i;
+            }
         }
 
-        let offset = self.get_page_offset(page.page_index);
-        self.storage
-            .seek(std::io::SeekFrom::Start(offset as u64))
-            .unwrap();
-
-        page.write(&mut self.storage);
+        self.remove_oldest_page();
+        self.pages.push(page);
+        self.pages.len() - 1
     }
 
     fn remove_oldest_page(&mut self) {
@@ -220,6 +187,28 @@ impl<Storage: BufferStream, T: Debug> VirtualArray<Storage, T> {
         Some(oldest)
     }
 
+    fn save_page(&mut self, page_index_in_buffer: usize) {
+        let page = self.pages.get(page_index_in_buffer).unwrap();
+        if !page.is_modified {
+            return;
+        }
+
+        let offset = self.get_page_offset(page.page_index);
+        self.storage
+            .seek(std::io::SeekFrom::Start(offset as u64))
+            .unwrap();
+
+        page.write(&mut self.storage);
+    }
+
+    fn get_page_index_by_element_index(&self, element_index: usize) -> usize {
+        element_index / self.count_of_elements_on_page
+    }
+
+    fn get_element_index_on_page(&self, element_index: usize) -> usize {
+        element_index % self.count_of_elements_on_page
+    }
+
     fn get_page_offset(&self, page_index: usize) -> usize {
         let value = Self::VM_SIGNATURE_SIZE
             + page_index
@@ -230,10 +219,7 @@ impl<Storage: BufferStream, T: Debug> VirtualArray<Storage, T> {
 
 impl<Storage: BufferStream, T: Debug> Drop for VirtualArray<Storage, T> {
     fn drop(&mut self) {
-        dbg!("here");
-
         for i in 0..self.pages.len() {
-            dbg!("here");
             self.save_page(i);
         }
     }

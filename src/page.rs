@@ -7,7 +7,7 @@ use std::{
 
 use crate::bitmap::Bitmap;
 
-// #[derive(Debug)]
+#[derive(Debug)]
 pub(crate) struct Page<T: Debug> {
     bitmap: Bitmap<T>,
     data: Vec<T>,
@@ -36,16 +36,12 @@ impl<T: Debug> Page<T> {
         }
     }
 
-    pub fn insert(&mut self, index_on_page: usize, value: T) {
+    pub fn set(&mut self, index_on_page: usize, value: T) {
         debug_assert!(index_on_page < self.elements_count_on_page);
-        // dbg!(index_on_page);
         self.is_modified = true;
         self.handling_time = SystemTime::now();
 
-        // dbg!(&value);
         self.data[index_on_page] = value;
-        // dbg!(&self.data[index_on_page]);
-
         self.bitmap.set(index_on_page);
     }
 

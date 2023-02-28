@@ -1,12 +1,7 @@
 use virtual_array::VirtualArray;
 
-// #[cfg(test)]
-// mod tests {
-// Note this useful idiom: importing names from outer (for mod tests) scope.
-// use super::*;
 #[test]
 fn test_add() {
-    // let mut va = VirtualArray::new("test.bin", 20, 1, 20);
     let mut va: VirtualArray<std::fs::File, u8> =
         VirtualArray::from_file_name("test_add.bin", 40, 1, 20).unwrap();
     va.set_element(0, 123);
