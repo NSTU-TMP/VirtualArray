@@ -1,4 +1,4 @@
-use std::{thread, time};
+use std::{fs::remove_file, thread, time};
 use virtual_array::VirtualArray;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -38,34 +38,65 @@ fn tet_add_with_struct() {
         surname: 101112,
     };
 
-    let mut va: VirtualArray<std::fs::File, Test> =
-        VirtualArray::from_file_name("test_add_with_struct.bin", 3, 1, 18).unwrap();
+    remove_file("test_add_with_struct.bin");
 
-    va.set_element(0, test_struct_1);
-    va.set_element(1, test_struct_2);
+    {
+        let mut va: VirtualArray<std::fs::File, Test> =
+            VirtualArray::from_file_name("test_add_with_struct.bin", 3, 1, 18).unwrap();
 
-    assert_eq!(va.get_element(0), Some(&test_struct_1));
-    assert_eq!(va.get_element(1), Some(&test_struct_2));
+        va.set_element(0, test_struct_1);
+        va.set_element(1, test_struct_2);
+    }
+
+    {
+        let mut va: VirtualArray<std::fs::File, Test> =
+            VirtualArray::from_file_name("test_add_with_struct.bin", 3, 1, 18).unwrap();
+
+        assert_eq!(va.get_element(0), Some(&test_struct_1));
+        assert_eq!(va.get_element(1), Some(&test_struct_2));
+    }
 }
 
 #[test]
 fn test_add() {
-    let mut va: VirtualArray<std::fs::File, u8> =
-        VirtualArray::from_file_name("test_add.bin", 40, 1000, 20).unwrap();
-    va.set_element(0, 123);
-    va.set_element(35, 99);
-    assert_eq!(va.get_element(0), Some(&123));
-    assert_eq!(va.get_element(35), Some(&99));
+    remove_file("test_add.bin");
+
+    {
+        let mut va: VirtualArray<std::fs::File, u8> =
+            VirtualArray::from_file_name("test_add.bin", 40, 1000, 20).unwrap();
+        va.set_element(0, 123);
+        va.set_element(35, 99);
+    }
+
+    {
+        let mut va: VirtualArray<std::fs::File, u8> =
+            VirtualArray::from_file_name("test_add.bin", 40, 1000, 20).unwrap();
+        assert_eq!(va.get_element(0), Some(&123));
+        assert_eq!(va.get_element(35), Some(&99));
+    }
 }
 
 #[test]
 fn test_remove() {
-    let mut va: VirtualArray<std::fs::File, u8> =
-        VirtualArray::from_file_name("test_remove.bin", 20, 1, 20).unwrap();
-    va.set_element(0, 123);
+    remove_file("test_remove.bin");
 
-    va.remove_element(0);
-    va.remove_element(1);
-    assert_eq!(va.get_element(0), None);
-    assert_eq!(va.get_element(1), None);
+    {
+        let mut va: VirtualArray<std::fs::File, u8> =
+            VirtualArray::from_file_name("test_remove.bin", 20, 1, 20).unwrap();
+        va.set_element(0, 123);
+    }
+
+    {
+        let mut va: VirtualArray<std::fs::File, u8> =
+            VirtualArray::from_file_name("test_remove.bin", 20, 1, 20).unwrap();
+        va.remove_element(0);
+        va.remove_element(1);
+    }
+
+    {
+        let mut va: VirtualArray<std::fs::File, u8> =
+            VirtualArray::from_file_name("test_remove.bin", 20, 1, 20).unwrap();
+        assert_eq!(va.get_element(0), None);
+        assert_eq!(va.get_element(1), None);
+    }
 }

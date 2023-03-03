@@ -2,7 +2,7 @@ use std::{
     fmt::Debug,
     fs::{File, OpenOptions},
     io::{Read, Seek, Write},
-    mem,
+    mem::{self, size_of},
     ops::{Deref, IndexMut},
     path::Path,
 };
@@ -51,19 +51,36 @@ impl<T: Debug> VirtualArray<File, T> {
             }
             file.flush().unwrap();
         } else {
-            file.seek(std::io::SeekFrom::Start(
-                Self::VM_SIGNATURE_SIZE as u64 + Self::VM_PAGE_SIZE_VALUE as u64,
-            ))
-            .unwrap();
-            let mut tmp = file.take(mem::size_of::<usize>() as u64);
+            file.seek(std::io::SeekFrom::Start(0)).unwrap();
+            let mut vm_buff = [0u8; 2];
+            file.read_exact(&mut vm_buff).unwrap();
 
-            // let mut x = [0; mem::size_of::<usize>()];
-            let mut y = Vec::with_capacity(mem::size_of::<usize>());
-            let n = tmp.read_to_end(&mut y);
+            if b"VM" != &vm_buff {
+                panic!("File should start with VM signature");
+            }
+
+            
+            let mut size_buff = [0u8; size_of::<usize>()];
+            file.read_exact(&mut size_buff).unwrap();
+
+            size = usize::from_be_bytes(size_buff);
+            dbg!(format!("size {}", size));
+
+            // file.seek(std::io::SeekFrom::Start(
+            //     Self::VM_SIGNATURE_SIZE as u64 + Self::VM_PAGE_SIZE_VALUE as u64,
+            // ))
+            // .unwrap();
+            // let mut tmp = file.take(mem::size_of::<usize>() as u64);
+            //
+            // // let mut x = [0; mem::size_of::<usize>()];
+            // let mut y = Vec::with_capacity(mem::size_of::<usize>());
+            // let n = tmp.read_to_end(&mut y);
 
             // file.read(&mut x).unwrap();
 
-            size = usize::from_be_bytes(y.as_slice().try_into().unwrap());
+            // size = usize::from_be_bytes(y.as_slice().try_into().unwrap());
+            // size = 
+
         }
 
         Self::new(file, array_size, buffer_size, size)
@@ -83,7 +100,6 @@ impl<Storage: BufferStream, T: Debug> VirtualArray<Storage, T> {
         let page_size = Self::count_page_size(desired_page_size);
 
         let count_of_elements_on_page = page_size / mem::size_of::<T>();
-        dbg!((array_size / count_of_elements_on_page + 1));
 
         storage.seek(std::io::SeekFrom::Start(0)).unwrap();
 
@@ -114,7 +130,6 @@ impl<Storage: BufferStream, T: Debug> VirtualArray<Storage, T> {
     }
 
     pub fn set_element(&mut self, element_index: usize, value: T) {
-        // dbg!("sdfsdfasfsdf", self.count_of_elements_on_page.clone());
         debug_assert!(element_index < self.array_size);
 
         let page_index = self.get_page_index_by_element_index(element_index);

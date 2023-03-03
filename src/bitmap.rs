@@ -50,7 +50,6 @@ impl Bitmap {
     }
 
     fn get_byte_bit_indices(&self, index: usize) -> (usize, usize) {
-        dbg!(&self);
         (index / 8, index % 8)
     }
 

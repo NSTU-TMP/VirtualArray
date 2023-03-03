@@ -1,4 +1,5 @@
 use core::slice;
+use std::fs::remove_file;
 
 use virtual_array::VirtualArray;
 
@@ -18,14 +19,25 @@ fn main() {
         surname: 101112,
     };
 
-    let mut va: VirtualArray<std::fs::File, Test> =
-        VirtualArray::from_file_name("test_add_with_struct.bin", 3, 1, 18).unwrap();
+    // let mut va: VirtualArray<std::fs::File, Test> =
+    //     VirtualArray::from_file_name("test_add_with_struct.bin", 3, 1, 18).unwrap();
+    //
+    // va.set_element(0, test_struct_1);
+    // va.set_element(1, test_struct_2);
+    remove_file("test_add_with_struct.bin");
+    {
+        let mut va: VirtualArray<std::fs::File, Test> =
+            VirtualArray::from_file_name("test_add_with_struct.bin", 3, 1, 18).unwrap();
 
-    va.set_element(0, test_struct_1);
-    va.set_element(1, test_struct_2);
+        va.set_element(0, test_struct_1);
+        va.set_element(1, test_struct_2);
+    }
 
-    dbg!(&va);
+    {
+        let mut va: VirtualArray<std::fs::File, Test> =
+            VirtualArray::from_file_name("test_add_with_struct.bin", 3, 1, 18).unwrap();
 
-    assert_eq!(va.get_element(0), Some(&test_struct_1));
-    assert_eq!(va.get_element(1), Some(&test_struct_2));
+        assert_eq!(va.get_element(0), Some(&test_struct_1));
+        assert_eq!(va.get_element(1), Some(&test_struct_2));
+    }
 }
