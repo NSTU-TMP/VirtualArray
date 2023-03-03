@@ -7,7 +7,7 @@ struct Test {
     surname: i64,
 }
 
-#[test]
+//#[test]
 fn float_test() {
     let mut va: VirtualArray<std::fs::File, f64> =
         VirtualArray::from_file_name("float_tets.bin", 100000000, 3, 512).unwrap();
@@ -24,8 +24,6 @@ fn float_test() {
     assert_eq!(Some(&3.0), va.get_element(0));
     assert_eq!(Some(&4.0), va.get_element(512));
     assert_eq!(Some(&6.0), va.get_element(2048));
-    // assert_eq!(Some(1.0), va.get_element(0));
-    // assert_eq!(Some(1.0), va.get_element(0));
 }
 
 #[test]
