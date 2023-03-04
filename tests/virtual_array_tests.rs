@@ -1,13 +1,13 @@
-use std::{fs::remove_file, thread, time};
+use std::fs::remove_file;
 use virtual_array::VirtualArray;
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, Default, PartialEq, Clone, Copy)]
 struct Test {
     name: u8,
     surname: u8,
 }
 
-//#[test]
+#[test]
 fn float_test() {
     let mut va: VirtualArray<std::fs::File, f64> =
         VirtualArray::from_file_name("float_tets.bin", 100000000, 3, 512).unwrap();
@@ -28,8 +28,8 @@ fn float_test() {
 #[test]
 fn tet_add_with_struct() {
     let test_struct_1 = Test {
-        name: 2,
-        surname: 1,
+        name: 5,
+        surname: 3,
     };
 
     let test_struct_2 = Test {
@@ -37,27 +37,44 @@ fn tet_add_with_struct() {
         surname: 16,
     };
 
+    #[deny(unused_must_use, unused, unused_results)]
     remove_file("test_add_with_struct.bin");
 
     {
         let mut va: VirtualArray<std::fs::File, Test> =
             VirtualArray::from_file_name("test_add_with_struct.bin", 9, 1, 18).unwrap();
-        for i in 0..8 {
-            va.set_element(i, test_struct_1);
+        for i in 0..9 {
+            va.set_element(
+                i,
+                if i % 2 == 0 {
+                    test_struct_1
+                } else {
+                    test_struct_2
+                },
+            );
         }
     }
 
     {
         let mut va: VirtualArray<std::fs::File, Test> =
-            VirtualArray::from_file_name("test_add_with_struct.bin", 3, 1, 18).unwrap();
+            VirtualArray::from_file_name("test_add_with_struct.bin", 9, 1, 18).unwrap();
 
-        assert_eq!(va.get_element(0), Some(&test_struct_1));
-        assert_eq!(va.get_element(1), Some(&test_struct_2));
+        for i in 0..9 {
+            assert_eq!(
+                va.get_element(i),
+                Some(&if i % 2 == 0 {
+                    test_struct_1
+                } else {
+                    test_struct_2
+                })
+            );
+        }
     }
 }
 
 #[test]
 fn test_add() {
+    #[deny(unused_must_use, unused, unused_results)]
     remove_file("test_add.bin");
 
     {
@@ -77,6 +94,7 @@ fn test_add() {
 
 #[test]
 fn test_remove() {
+    #[deny(unused_must_use, unused, unused_results)]
     remove_file("test_remove.bin");
 
     {

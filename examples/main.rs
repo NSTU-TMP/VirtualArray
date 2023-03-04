@@ -3,7 +3,7 @@ use std::fs::remove_file;
 
 use virtual_array::VirtualArray;
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Default, Debug, PartialEq, Clone, Copy)]
 struct Test {
     name: i64,
     surname: i64,

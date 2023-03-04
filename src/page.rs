@@ -8,7 +8,7 @@ use std::{
 use crate::bitmap::Bitmap;
 
 #[derive(Debug)]
-pub(crate) struct Page<T: Debug> {
+pub(crate) struct Page<T: Debug + Default + Clone> {
     bitmap: Bitmap,
     data: Vec<T>,
     pub handling_time: SystemTime,
@@ -17,15 +17,14 @@ pub(crate) struct Page<T: Debug> {
     pub page_index: usize,
 }
 
-impl<T: Debug> Page<T> {
+impl<T: Debug + Default + Clone> Page<T> {
     pub fn new(page_index: usize, elements_count_on_page: usize) -> Self {
         let mut data = Vec::with_capacity(elements_count_on_page);
 
-        for _i in 0..elements_count_on_page {
-            unsafe {
-                data.push(mem::zeroed::<T>());
-            }
+        for _ in 0..elements_count_on_page {
+            data.push(T::default());
         }
+
         Self {
             page_index,
             elements_count_on_page,
@@ -65,10 +64,13 @@ impl<T: Debug> Page<T> {
 
     pub fn write<W: Write>(&self, writer: &mut W) {
         let data_as_bytes = unsafe {
-            slice::from_raw_parts(
-                self.data.as_slice().as_ptr() as *const u8,
+            let a = slice::from_raw_parts(
+                // self.data.as_slice().as_ptr() as *const u8,
+                self.data.as_ptr() as *const u8,
                 mem::size_of::<T>() * self.data.len(),
-            )
+            );
+
+            a
         };
 
         writer.write_all(data_as_bytes).unwrap();
@@ -87,7 +89,9 @@ impl<T: Debug> Page<T> {
             return None;
         }
 
-        let data = unsafe { std::mem::transmute::<Vec<u8>, Vec<T>>(buffer) };
+        let data = unsafe {
+            slice::from_raw_parts(buffer.clone().as_ptr() as *const T, elements_count_on_page).to_vec()
+        };
 
         Some(Self {
             page_index,

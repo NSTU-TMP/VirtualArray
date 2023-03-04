@@ -3,14 +3,13 @@ use std::{
     fs::{File, OpenOptions},
     io::{Read, Seek, Write},
     mem::{self, size_of},
-    ops::{Deref, IndexMut},
     path::Path,
 };
 
 use crate::{bitmap::calc_bitmap_byte_size, page::Page, BufferStream};
 
 #[derive(Debug)]
-pub struct VirtualArray<Storage: BufferStream, T: Debug> {
+pub struct VirtualArray<Storage: BufferStream, T: Debug + Default + Clone> {
     pages: Vec<Page<T>>,
     array_size: usize,
     page_size: usize,
@@ -19,7 +18,7 @@ pub struct VirtualArray<Storage: BufferStream, T: Debug> {
     storage: Storage,
 }
 
-impl<T: Debug> VirtualArray<File, T> {
+impl<T: Debug + Default + Clone> VirtualArray<File, T> {
     pub fn from_file_name<'file_name>(
         file_name: &'file_name str,
         array_size: usize,
@@ -71,7 +70,7 @@ impl<T: Debug> VirtualArray<File, T> {
     }
 }
 
-impl<Storage: BufferStream, T: Debug> VirtualArray<Storage, T> {
+impl<Storage: BufferStream, T: Debug + Default + Clone> VirtualArray<Storage, T> {
     const VM_SIGNATURE_SIZE: usize = 2 * mem::size_of::<u8>();
     const VM_PAGE_SIZE_VALUE: usize = mem::size_of::<usize>();
 
@@ -169,19 +168,16 @@ impl<Storage: BufferStream, T: Debug> VirtualArray<Storage, T> {
     fn read_page(&mut self, page_index: usize) -> &mut Page<T> {
         let offset =
             Self::get_page_offset(page_index, self.page_size, self.count_of_elements_on_page);
+
         self.storage
             .seek(std::io::SeekFrom::Start(offset as u64))
             .unwrap();
 
-        let page = if let Some(page) = Page::read(
+        let page = Page::read(
             page_index,
             self.count_of_elements_on_page,
             &mut self.storage,
-        ) {
-            page
-        } else {
-            Page::new(page_index, self.count_of_elements_on_page)
-        };
+        ).unwrap();
 
         let index = self.insert_page(page);
         self.pages.get_mut(index).unwrap()
@@ -234,7 +230,6 @@ impl<Storage: BufferStream, T: Debug> VirtualArray<Storage, T> {
         if !page.is_modified {
             return;
         }
-        dbg!(&page);
 
         let offset = Self::get_page_offset(
             page.page_index,
@@ -269,7 +264,7 @@ impl<Storage: BufferStream, T: Debug> VirtualArray<Storage, T> {
     }
 }
 
-impl<Storage: BufferStream, T: Debug> Drop for VirtualArray<Storage, T> {
+impl<Storage: BufferStream, T: Debug + Default + Clone> Drop for VirtualArray<Storage, T> {
     fn drop(&mut self) {
         for i in 0..self.pages.len() {
             self.save_page(i);
