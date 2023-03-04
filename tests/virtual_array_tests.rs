@@ -3,8 +3,8 @@ use virtual_array::VirtualArray;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 struct Test {
-    name: i64,
-    surname: i64,
+    name: u8,
+    surname: u8,
 }
 
 //#[test]
@@ -20,7 +20,6 @@ fn float_test() {
     va.set_element(99999999, 6.0);
     va.remove_element(1024);
 
-    //thread::sleep(time::Duration::from_millis(1000000));
     assert_eq!(Some(&3.0), va.get_element(0));
     assert_eq!(Some(&4.0), va.get_element(512));
     assert_eq!(Some(&6.0), va.get_element(2048));
@@ -29,23 +28,23 @@ fn float_test() {
 #[test]
 fn tet_add_with_struct() {
     let test_struct_1 = Test {
-        name: 123,
-        surname: 456,
+        name: 2,
+        surname: 1,
     };
 
     let test_struct_2 = Test {
-        name: 789,
-        surname: 101112,
+        name: 11,
+        surname: 16,
     };
 
     remove_file("test_add_with_struct.bin");
 
     {
         let mut va: VirtualArray<std::fs::File, Test> =
-            VirtualArray::from_file_name("test_add_with_struct.bin", 3, 1, 18).unwrap();
-
-        va.set_element(0, test_struct_1);
-        va.set_element(1, test_struct_2);
+            VirtualArray::from_file_name("test_add_with_struct.bin", 9, 1, 18).unwrap();
+        for i in 0..8 {
+            va.set_element(i, test_struct_1);
+        }
     }
 
     {

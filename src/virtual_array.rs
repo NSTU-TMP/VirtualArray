@@ -33,24 +33,9 @@ impl<T: Debug> VirtualArray<File, T> {
             .read(true)
             .open(Path::new(file_name))
             .unwrap();
-        let mut size = Self::count_page_size(desired_page_size);
-        let count_of_elements_on_page = size / mem::size_of::<T>();
+        let mut page_size = Self::count_page_size(desired_page_size);
 
-        if !is_exist {
-            file.seek(std::io::SeekFrom::Start(0)).unwrap();
-            file.write_all(b"VM").unwrap();
-
-            file.write_all(&size.to_be_bytes()).unwrap();
-            let page = Page::<T>::new(0, count_of_elements_on_page);
-
-            for i in 0..(array_size / count_of_elements_on_page + 1) {
-                let offset = Self::get_page_offset(i, size, count_of_elements_on_page);
-                file.seek(std::io::SeekFrom::Start(offset as u64)).unwrap();
-                page.write(&mut file);
-                file.flush().unwrap();
-            }
-            file.flush().unwrap();
-        } else {
+        if is_exist {
             file.seek(std::io::SeekFrom::Start(0)).unwrap();
             let mut vm_buff = [0u8; 2];
             file.read_exact(&mut vm_buff).unwrap();
@@ -59,31 +44,30 @@ impl<T: Debug> VirtualArray<File, T> {
                 panic!("File should start with VM signature");
             }
 
-            
             let mut size_buff = [0u8; size_of::<usize>()];
             file.read_exact(&mut size_buff).unwrap();
 
-            size = usize::from_be_bytes(size_buff);
-            dbg!(format!("size {}", size));
+            page_size = usize::from_be_bytes(size_buff);
+        } else {
+            let count_of_elements_on_page = Self::count_elements_on_page(page_size);
 
-            // file.seek(std::io::SeekFrom::Start(
-            //     Self::VM_SIGNATURE_SIZE as u64 + Self::VM_PAGE_SIZE_VALUE as u64,
-            // ))
-            // .unwrap();
-            // let mut tmp = file.take(mem::size_of::<usize>() as u64);
-            //
-            // // let mut x = [0; mem::size_of::<usize>()];
-            // let mut y = Vec::with_capacity(mem::size_of::<usize>());
-            // let n = tmp.read_to_end(&mut y);
+            file.seek(std::io::SeekFrom::Start(0)).unwrap();
+            file.write_all(b"VM").unwrap();
 
-            // file.read(&mut x).unwrap();
+            file.write_all(&page_size.to_be_bytes()).unwrap();
 
-            // size = usize::from_be_bytes(y.as_slice().try_into().unwrap());
-            // size = 
+            let page = Page::<T>::new(0, count_of_elements_on_page);
 
+            for i in 0..(array_size / count_of_elements_on_page + 1) {
+                let offset = Self::get_page_offset(i, page_size, count_of_elements_on_page);
+                file.seek(std::io::SeekFrom::Start(offset as u64)).unwrap();
+                page.write(&mut file);
+                file.flush().unwrap();
+            }
+            file.flush().unwrap();
         }
 
-        Self::new(file, array_size, buffer_size, size)
+        Self::new(file, array_size, buffer_size, page_size)
     }
 }
 
@@ -99,7 +83,7 @@ impl<Storage: BufferStream, T: Debug> VirtualArray<Storage, T> {
     ) -> Option<Self> {
         let page_size = Self::count_page_size(desired_page_size);
 
-        let count_of_elements_on_page = page_size / mem::size_of::<T>();
+        let count_of_elements_on_page = Self::count_elements_on_page(page_size);
 
         storage.seek(std::io::SeekFrom::Start(0)).unwrap();
 
@@ -127,6 +111,10 @@ impl<Storage: BufferStream, T: Debug> VirtualArray<Storage, T> {
         } else {
             desired_page_size + (mem::size_of::<T>() - (desired_page_size % mem::size_of::<T>()))
         }
+    }
+
+    fn count_elements_on_page(page_size: usize) -> usize {
+        page_size / mem::size_of::<T>()
     }
 
     pub fn set_element(&mut self, element_index: usize, value: T) {
@@ -246,6 +234,7 @@ impl<Storage: BufferStream, T: Debug> VirtualArray<Storage, T> {
         if !page.is_modified {
             return;
         }
+        dbg!(&page);
 
         let offset = Self::get_page_offset(
             page.page_index,
