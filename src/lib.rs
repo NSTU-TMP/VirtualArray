@@ -19,6 +19,7 @@ pub trait BufferStream: Read + Write + Seek {
         page_size: usize,
         count_of_elements_on_page: usize,
     ) -> usize;
+    fn seek_to_start(&mut self) -> Result<u64, Error>;
     fn seek_to_page(
         &mut self,
         page_index: usize,
@@ -28,6 +29,9 @@ pub trait BufferStream: Read + Write + Seek {
 }
 
 impl BufferStream for File {
+    fn seek_to_start(&mut self) -> Result<u64, Error> {
+        self.seek(std::io::SeekFrom::Start(0))
+    }
     fn get_page_offset(
         page_index: usize,
         page_size: usize,

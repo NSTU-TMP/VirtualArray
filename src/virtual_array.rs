@@ -1,12 +1,12 @@
 use std::{
     fmt::Debug,
     fs::{File, OpenOptions},
-    io::{Read, Seek, Write},
+    io::{Read, Write},
     mem::{self, size_of},
     path::Path,
 };
 
-use crate::{bitmap::calc_bitmap_byte_size, page::Page, BufferStream};
+use crate::{page::Page, BufferStream};
 
 #[derive(Debug)]
 pub struct VirtualArray<Storage: BufferStream, T: Debug + Default + Clone> {
@@ -35,7 +35,7 @@ impl<T: Debug + Default + Clone> VirtualArray<File, T> {
         let mut page_size = Self::count_page_size(desired_page_size);
 
         if is_exist {
-            file.seek(std::io::SeekFrom::Start(0)).unwrap();
+            file.seek_to_start().unwrap();
             let mut vm_buff = [0u8; 2];
             file.read_exact(&mut vm_buff).unwrap();
 
@@ -50,7 +50,7 @@ impl<T: Debug + Default + Clone> VirtualArray<File, T> {
         } else {
             let count_of_elements_on_page = Self::count_elements_on_page(page_size);
 
-            file.seek(std::io::SeekFrom::Start(0)).unwrap();
+            file.seek_to_start().unwrap();
             file.write_all(b"VM").unwrap();
 
             file.write_all(&page_size.to_be_bytes()).unwrap();
@@ -81,7 +81,7 @@ impl<Storage: BufferStream, T: Debug + Default + Clone> VirtualArray<Storage, T>
 
         let count_of_elements_on_page = Self::count_elements_on_page(page_size);
 
-        storage.seek(std::io::SeekFrom::Start(0)).unwrap();
+        storage.seek_to_start().unwrap();
 
         let mut buf: [u8; 2] = [0, 0];
 
