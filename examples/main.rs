@@ -1,6 +1,5 @@
 use virtual_array::VirtualArrayBuilder;
 
-
 fn main() {
     let mut va = VirtualArrayBuilder::from_file_name("main_example.bin")
         .item_type::<u8>()

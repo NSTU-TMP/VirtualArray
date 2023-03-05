@@ -26,8 +26,7 @@ fn get_page_offset<const SIGNATURE_SIZE: usize>(
     page_index: usize,
     page_size: usize,
     count_of_elements_on_page: usize,
-) -> usize
-{
+) -> usize {
     SIGNATURE_SIZE * mem::size_of::<u8>()
         + mem::size_of::<usize>()
         + page_index
@@ -39,13 +38,9 @@ fn seek_to_page<const SIGNATURE_SIZE: usize>(
     page_index: usize,
     page_size: usize,
     count_of_elements_on_page: usize,
-) -> Result<u64, Error>
-{
-    let offset = get_page_offset::<SIGNATURE_SIZE>(
-        page_index,
-        page_size,
-        count_of_elements_on_page,
-    );
+) -> Result<u64, Error> {
+    let offset =
+        get_page_offset::<SIGNATURE_SIZE>(page_index, page_size, count_of_elements_on_page);
     repo.seek(std::io::SeekFrom::Start(offset as u64))
 }
 
