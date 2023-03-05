@@ -1,273 +1,348 @@
-use super::{Metadata, Storage, VirtualArray, DEFAULT_SIGNATURE, DEFAULT_SIGNATURE_SIZE};
+use crate::bitmap::{BitmapReaderWriter, DefaultBitmapReaderWriter};
+use crate::page::{DefaultPageReaderWriter, Page, PageReaderWriter};
+use crate::{BytesCount, Repository};
 use std::fmt::Debug;
-use std::fs::{File, OpenOptions};
+use std::fs::OpenOptions;
+use std::marker::PhantomData;
 use std::path::Path;
 
-pub struct VirtualArrayBuilder<FileName, Storage, ArraySize, BufferSize, PageSize, Signature> {
-    file_name: FileName,
-    storage: Storage,
-    array_size: ArraySize,
-    buffer_size: BufferSize,
-    desired_page_size: PageSize,
-    signature: Signature,
-}
+use super::metadata::Metadata;
+use super::{VirtualArray, DEFAULT_SIGNATURE, DEFAULT_SIGNATURE_SIZE};
 
 pub struct NoneValue;
 
-impl VirtualArrayBuilder<NoneValue, NoneValue, NoneValue, NoneValue, NoneValue, NoneValue> {
-    pub fn new() -> Self {
-        Self {
-            file_name: NoneValue,
-            storage: NoneValue,
+enum BuilderScheme {
+    FromRepository(Box<dyn Repository>),
+    FromFileName(String),
+}
+
+pub struct VirtualArrayBuilder<
+    const SIGNATURE_SIZE: usize,
+    ArraySize,
+    BufferSize,
+    PageSize,
+    Item,
+    BitmapRW,
+    PageRW,
+> {
+    scheme: BuilderScheme,
+    array_size: ArraySize,
+    buffer_size: BufferSize,
+    desired_page_size: PageSize,
+    signature: [u8; SIGNATURE_SIZE],
+    bitmap_rw: BitmapRW,
+    page_rw: PageRW,
+    _item_marker: PhantomData<Item>,
+}
+
+impl<'file_name>
+    VirtualArrayBuilder<
+        { DEFAULT_SIGNATURE_SIZE },
+        NoneValue,
+        NoneValue,
+        NoneValue,
+        NoneValue,
+        DefaultBitmapReaderWriter,
+        DefaultPageReaderWriter,
+    >
+{
+    pub fn from_repository(
+        storage: Box<dyn Repository>,
+    ) -> VirtualArrayBuilder<
+        { DEFAULT_SIGNATURE_SIZE },
+        NoneValue,
+        NoneValue,
+        NoneValue,
+        NoneValue,
+        DefaultBitmapReaderWriter,
+        DefaultPageReaderWriter,
+    > {
+        VirtualArrayBuilder {
+            scheme: BuilderScheme::FromRepository(storage),
             array_size: NoneValue,
             buffer_size: NoneValue,
             desired_page_size: NoneValue,
-            signature: NoneValue,
+            signature: DEFAULT_SIGNATURE,
+            page_rw: DefaultPageReaderWriter,
+            bitmap_rw: DefaultBitmapReaderWriter,
+            _item_marker: PhantomData,
+        }
+    }
+
+    pub fn from_file_name(
+        file_name: &'file_name str,
+    ) -> VirtualArrayBuilder<
+        { DEFAULT_SIGNATURE_SIZE },
+        NoneValue,
+        NoneValue,
+        NoneValue,
+        NoneValue,
+        DefaultBitmapReaderWriter,
+        DefaultPageReaderWriter,
+    > {
+        VirtualArrayBuilder {
+            scheme: BuilderScheme::FromFileName(file_name.to_owned()),
+            array_size: NoneValue,
+            buffer_size: NoneValue,
+            desired_page_size: NoneValue,
+            signature: DEFAULT_SIGNATURE,
+            page_rw: DefaultPageReaderWriter,
+            bitmap_rw: DefaultBitmapReaderWriter,
+            _item_marker: PhantomData,
         }
     }
 }
 
-impl<ArraySize, BufferSize, PageSize, Signature>
-    VirtualArrayBuilder<NoneValue, NoneValue, ArraySize, BufferSize, PageSize, Signature>
+impl<
+        'file_name,
+        const SIGNATURE_SIZE: usize,
+        ArraySize,
+        BufferSize,
+        PageSize,
+        Item,
+        BitmapRW,
+        PageRW,
+    > VirtualArrayBuilder<SIGNATURE_SIZE, ArraySize, BufferSize, PageSize, Item, BitmapRW, PageRW>
 {
-    pub fn file_name<'file_name>(
+    pub fn item_type<I: Clone + Default + Debug>(
         self,
-        value: &'file_name str,
-    ) -> VirtualArrayBuilder<&'file_name str, NoneValue, ArraySize, BufferSize, PageSize, Signature>
+    ) -> VirtualArrayBuilder<SIGNATURE_SIZE, ArraySize, BufferSize, PageSize, I, BitmapRW, PageRW>
     {
         VirtualArrayBuilder {
-            file_name: value,
-            storage: NoneValue,
+            scheme: self.scheme,
             array_size: self.array_size,
             buffer_size: self.buffer_size,
             desired_page_size: self.desired_page_size,
             signature: self.signature,
+            page_rw: self.page_rw,
+            bitmap_rw: self.bitmap_rw,
+            _item_marker: PhantomData,
         }
     }
 }
 
-impl<ArraySize, BufferSize, PageSize, Signature>
-    VirtualArrayBuilder<NoneValue, NoneValue, ArraySize, BufferSize, PageSize, Signature>
-{
-    pub fn storage<S: Storage>(
-        self,
-        value: S,
-    ) -> VirtualArrayBuilder<NoneValue, S, ArraySize, BufferSize, PageSize, Signature> {
-        VirtualArrayBuilder {
-            file_name: NoneValue,
-            storage: value,
-            array_size: self.array_size,
-            buffer_size: self.buffer_size,
-            desired_page_size: self.desired_page_size,
-            signature: self.signature,
-        }
-    }
-}
-
-impl<FileName, Storage, BufferSize, PageSize, Signature>
-    VirtualArrayBuilder<FileName, Storage, NoneValue, BufferSize, PageSize, Signature>
+impl<'file_name, const SIGNATURE_SIZE: usize, BufferSize, PageSize, Item, BitmapRW, PageRW>
+    VirtualArrayBuilder<SIGNATURE_SIZE, NoneValue, BufferSize, PageSize, Item, BitmapRW, PageRW>
 {
     pub fn array_size(
         self,
         value: usize,
-    ) -> VirtualArrayBuilder<FileName, Storage, usize, BufferSize, PageSize, Signature> {
+    ) -> VirtualArrayBuilder<SIGNATURE_SIZE, usize, BufferSize, PageSize, Item, BitmapRW, PageRW>
+    {
         VirtualArrayBuilder {
-            file_name: self.file_name,
-            storage: self.storage,
+            scheme: self.scheme,
             array_size: value,
             buffer_size: self.buffer_size,
             desired_page_size: self.desired_page_size,
             signature: self.signature,
+            page_rw: self.page_rw,
+            bitmap_rw: self.bitmap_rw,
+            _item_marker: PhantomData,
         }
     }
 }
 
-impl<FileName, Storage, ArraySize, PageSize, Signature>
-    VirtualArrayBuilder<FileName, Storage, ArraySize, NoneValue, PageSize, Signature>
+impl<const SIGNATURE_SIZE: usize, ArraySize, PageSize, Item, BitmapRW, PageRW>
+    VirtualArrayBuilder<SIGNATURE_SIZE, ArraySize, NoneValue, PageSize, Item, BitmapRW, PageRW>
 {
     pub fn buffer_size(
         self,
         value: usize,
-    ) -> VirtualArrayBuilder<FileName, Storage, ArraySize, usize, PageSize, Signature> {
+    ) -> VirtualArrayBuilder<SIGNATURE_SIZE, ArraySize, usize, PageSize, Item, BitmapRW, PageRW>
+    {
         VirtualArrayBuilder {
-            file_name: self.file_name,
-            storage: self.storage,
+            scheme: self.scheme,
             array_size: self.array_size,
             buffer_size: value,
             desired_page_size: self.desired_page_size,
             signature: self.signature,
+            page_rw: self.page_rw,
+            bitmap_rw: self.bitmap_rw,
+            _item_marker: PhantomData,
         }
     }
 }
 
-impl<FileName, Storage, ArraySize, BufferSize, Signature>
-    VirtualArrayBuilder<FileName, Storage, ArraySize, BufferSize, NoneValue, Signature>
+impl<const SIGNATURE_SIZE: usize, ArraySize, BufferSize, Item, BitmapRW, PageRW>
+    VirtualArrayBuilder<SIGNATURE_SIZE, ArraySize, BufferSize, NoneValue, Item, BitmapRW, PageRW>
 {
     pub fn desired_page_size(
         self,
         value: usize,
-    ) -> VirtualArrayBuilder<FileName, Storage, ArraySize, BufferSize, usize, Signature> {
+    ) -> VirtualArrayBuilder<SIGNATURE_SIZE, ArraySize, BufferSize, usize, Item, BitmapRW, PageRW>
+    {
         VirtualArrayBuilder {
-            file_name: self.file_name,
-            storage: self.storage,
+            scheme: self.scheme,
             array_size: self.array_size,
             buffer_size: self.buffer_size,
             desired_page_size: value,
             signature: self.signature,
+            page_rw: self.page_rw,
+            bitmap_rw: self.bitmap_rw,
+            _item_marker: PhantomData,
         }
     }
 }
 
-impl<FileName, Storage, ArraySize, BufferSize, PageSize>
-    VirtualArrayBuilder<FileName, Storage, ArraySize, BufferSize, PageSize, NoneValue>
+impl<const SIGNATURE_SIZE: usize, ArraySize, BufferSize, PageSize, Item, BitmapRW, PageRW>
+    VirtualArrayBuilder<SIGNATURE_SIZE, ArraySize, BufferSize, PageSize, Item, BitmapRW, PageRW>
 {
-    pub fn signature<const SIGNATURE_SIZE: usize>(
+    pub fn signature(
         self,
         value: [u8; SIGNATURE_SIZE],
-    ) -> VirtualArrayBuilder<FileName, Storage, ArraySize, BufferSize, PageSize, [u8; SIGNATURE_SIZE]>
+    ) -> VirtualArrayBuilder<SIGNATURE_SIZE, ArraySize, BufferSize, PageSize, Item, BitmapRW, PageRW>
     {
         VirtualArrayBuilder {
-            file_name: self.file_name,
-            storage: self.storage,
+            scheme: self.scheme,
             array_size: self.array_size,
             buffer_size: self.buffer_size,
             desired_page_size: self.desired_page_size,
             signature: value,
+            page_rw: self.page_rw,
+            bitmap_rw: self.bitmap_rw,
+            _item_marker: PhantomData,
         }
     }
 }
 
-impl<'file_name>
-    VirtualArrayBuilder<&'file_name str, NoneValue, usize, usize, usize, NoneValue>
+impl<const SIGNATURE_SIZE: usize, ArraySize, BufferSize, PageSize, Item, BitmapRW, PageRW>
+    VirtualArrayBuilder<SIGNATURE_SIZE, ArraySize, BufferSize, PageSize, Item, BitmapRW, PageRW>
+where
+    Item: Clone + Debug + Default,
+    BitmapRW: BitmapReaderWriter,
+    PageRW: PageReaderWriter<BitmapRW, Item>,
 {
-    pub fn create<T: Default + Debug + Clone>(
+    pub fn page_reader_writer(
         self,
-    ) -> VirtualArray<DEFAULT_SIGNATURE_SIZE, std::fs::File, T> {
-        self.signature(DEFAULT_SIGNATURE).use_file_as_storage(true).create::<T>()
-    }
-}
-
-impl<'file_name>
-    VirtualArrayBuilder<&'file_name str, NoneValue, NoneValue, usize, NoneValue, NoneValue>
-{
-    pub fn open<T: Default + Debug + Clone>(
-        self,
-    ) -> VirtualArray<DEFAULT_SIGNATURE_SIZE, std::fs::File, T> {
-        self.signature(DEFAULT_SIGNATURE).use_file_as_storage(false).open::<T>()
-    }
-}
-
-impl<'file_name, const SIGNATURE_SIZE: usize>
-    VirtualArrayBuilder<&'file_name str, NoneValue, usize, usize, usize, [u8; SIGNATURE_SIZE]>
-{
-    pub fn create<T: Default + Debug + Clone>(
-        self,
-    ) -> VirtualArray<SIGNATURE_SIZE, std::fs::File, T> {
-        self.use_file_as_storage(true).create::<T>()
-    }
-}
-
-impl<'file_name, const SIGNATURE_SIZE: usize>
-    VirtualArrayBuilder<&'file_name str, NoneValue, NoneValue, usize, NoneValue, [u8; SIGNATURE_SIZE]>
-{
-    pub fn open<T: Default + Debug + Clone>(
-        self,
-    ) -> VirtualArray<SIGNATURE_SIZE, std::fs::File, T> {
-        self.use_file_as_storage(false).open::<T>()
-    }
-}
-
-impl<'file_name, ArraySize, BufferSize, PageSize, Signature>
-    VirtualArrayBuilder<&'file_name str, NoneValue, ArraySize, BufferSize, PageSize, Signature>
-{
-    pub fn use_file_as_storage(
-        self,
-        create: bool,
-    ) -> VirtualArrayBuilder<NoneValue, File, ArraySize, BufferSize, PageSize, Signature> {
-        let file = OpenOptions::new()
-            .create(create)
-            .write(true)
-            .read(true)
-            .open(Path::new(self.file_name))
-            .unwrap();
-
+        value: PageRW,
+    ) -> VirtualArrayBuilder<SIGNATURE_SIZE, ArraySize, BufferSize, PageSize, Item, BitmapRW, PageRW>
+    {
         VirtualArrayBuilder {
-            file_name: NoneValue,
-            storage: file,
+            scheme: self.scheme,
+            array_size: self.array_size,
             buffer_size: self.buffer_size,
             desired_page_size: self.desired_page_size,
-            array_size: self.array_size,
             signature: self.signature,
+            page_rw: value,
+            bitmap_rw: self.bitmap_rw,
+            _item_marker: PhantomData,
         }
     }
 }
 
-impl<S: Storage> VirtualArrayBuilder<NoneValue, S, usize, usize, usize, NoneValue> {
-    pub fn create<T: Default + Debug + Clone>(self) -> VirtualArray<DEFAULT_SIGNATURE_SIZE, S, T> {
-        self.signature::<DEFAULT_SIGNATURE_SIZE>(DEFAULT_SIGNATURE)
-            .create()
-    }
-}
-
-impl<S: Storage> VirtualArrayBuilder<NoneValue, S, NoneValue, usize, NoneValue, NoneValue> {
-    pub fn open<T: Default + Debug + Clone>(self) -> VirtualArray<DEFAULT_SIGNATURE_SIZE, S, T> {
-        self.signature::<DEFAULT_SIGNATURE_SIZE>(DEFAULT_SIGNATURE)
-            .open()
-    }
-}
-
-impl<const SIGNATURE_SIZE: usize, S: Storage>
-    VirtualArrayBuilder<NoneValue, S, usize, usize, usize, [u8; SIGNATURE_SIZE]>
+impl<const SIGNATURE_SIZE: usize, ArraySize, BufferSize, PageSize, Item, BitmapRW, PageRW>
+    VirtualArrayBuilder<SIGNATURE_SIZE, ArraySize, BufferSize, PageSize, Item, BitmapRW, PageRW>
+where
+    Item: Clone + Debug + Default,
+    BitmapRW: BitmapReaderWriter,
+    PageRW: PageReaderWriter<BitmapRW, Item>,
 {
-    pub fn create<T: Default + Debug + Clone>(mut self) -> VirtualArray<SIGNATURE_SIZE, S, T> {
+    pub fn bitmap_reader_writer(
+        self,
+        value: BitmapRW,
+    ) -> VirtualArrayBuilder<SIGNATURE_SIZE, ArraySize, BufferSize, PageSize, Item, BitmapRW, PageRW>
+    {
+        VirtualArrayBuilder {
+            scheme: self.scheme,
+            array_size: self.array_size,
+            buffer_size: self.buffer_size,
+            desired_page_size: self.desired_page_size,
+            signature: self.signature,
+            page_rw: self.page_rw,
+            bitmap_rw: value,
+            _item_marker: PhantomData,
+        }
+    }
+}
+
+impl<'file_name, const SIGNATURE_SIZE: usize, Item, BitmapRW, PageRW>
+    VirtualArrayBuilder<SIGNATURE_SIZE, usize, usize, usize, Item, BitmapRW, PageRW>
+where
+    Item: Clone + Debug + Default,
+    BitmapRW: BitmapReaderWriter,
+    PageRW: PageReaderWriter<BitmapRW, Item>,
+{
+    pub fn create(self) -> VirtualArray<SIGNATURE_SIZE, Item, BitmapRW, PageRW> {
+        let mut repository = match self.scheme {
+            BuilderScheme::FromRepository(repository) => repository,
+            BuilderScheme::FromFileName(file_name) => open_file(&file_name, true),
+        };
+
         let metadata = Metadata {
             array_size: self.array_size,
             signature: self.signature,
-            page_size: VirtualArray::<SIGNATURE_SIZE, S, T>::count_page_size(
-                self.desired_page_size,
-            ),
+            page_size: calc_page_size::<Item>(self.desired_page_size),
         };
 
-        self.storage.seek_to_start().unwrap();
-        metadata.write(&mut self.storage).unwrap();
-        self.storage.flush().unwrap();
+        metadata.write(&mut repository).unwrap();
+        repository.flush().unwrap();
 
-        let count_of_elements_on_page = metadata.count_elements_on_page::<T>();
-        let page = crate::page::Page::<T>::new(0, count_of_elements_on_page);
+        let count_of_elements_on_page = metadata.count_elements_on_page::<Item>();
 
         for i in 0..(self.array_size / count_of_elements_on_page + 1) {
-            self.storage
-                .seek_to_page(i, metadata.page_size, count_of_elements_on_page)
-                .unwrap();
-
-            page.write(&mut self.storage);
-            self.storage.flush().unwrap();
+            let page = Page::zeroed(i, count_of_elements_on_page);
+            PageRW::write(&mut repository, &page);
+            repository.flush().unwrap();
         }
 
         VirtualArray {
-            storage: self.storage,
+            repository,
             buffer_size: self.buffer_size,
             metadata,
             pages: Vec::with_capacity(self.buffer_size),
             count_of_elements_on_page,
+            bitmap_rw: self.bitmap_rw,
+            page_rw: self.page_rw,
         }
     }
 }
 
-impl<const SIGNATURE_SIZE: usize, S: Storage>
-    VirtualArrayBuilder<NoneValue, S, NoneValue, usize, NoneValue, [u8; SIGNATURE_SIZE]>
+impl<'file_name, const SIGNATURE_SIZE: usize, Item, BitmapRW, PageRW>
+    VirtualArrayBuilder<SIGNATURE_SIZE, NoneValue, usize, NoneValue, Item, BitmapRW, PageRW>
+where
+    Item: Clone + Debug + Default,
+    BitmapRW: BitmapReaderWriter,
+    PageRW: PageReaderWriter<BitmapRW, Item>,
 {
-    pub fn open<T: Default + Debug + Clone>(mut self) -> VirtualArray<SIGNATURE_SIZE, S, T> {
-        self.storage.seek_to_start().unwrap();
-        let metadata = Metadata::read(&mut self.storage).unwrap();
-        let count_of_elements_on_page = metadata.count_elements_on_page::<T>();
+    pub fn open(self) -> VirtualArray<SIGNATURE_SIZE, Item, BitmapRW, PageRW> {
+        let mut repository = match self.scheme {
+            BuilderScheme::FromRepository(repository) => repository,
+            BuilderScheme::FromFileName(file_name) => open_file(&file_name, false),
+        };
+
+        repository.seek_to_start();
+        let metadata = Metadata::read(&mut repository).unwrap();
+
+        let count_of_elements_on_page = metadata.count_elements_on_page::<Item>();
 
         VirtualArray {
-            storage: self.storage,
+            repository,
             buffer_size: self.buffer_size,
             metadata,
             pages: Vec::with_capacity(self.buffer_size),
             count_of_elements_on_page,
+            bitmap_rw: self.bitmap_rw,
+            page_rw: self.page_rw,
         }
     }
+}
+
+fn calc_page_size<Item>(desired_page_size: usize) -> BytesCount {
+    if desired_page_size % std::mem::size_of::<Item>() == 0 {
+        desired_page_size
+    } else {
+        desired_page_size
+            + (std::mem::size_of::<Item>() - (desired_page_size % std::mem::size_of::<Item>()))
+    }
+}
+
+fn open_file(file_name: &str, create: bool) -> Box<dyn Repository> {
+    Box::new(
+        OpenOptions::new()
+            .create(create)
+            .write(true)
+            .read(true)
+            .open(Path::new(file_name))
+            .unwrap(),
+    )
 }

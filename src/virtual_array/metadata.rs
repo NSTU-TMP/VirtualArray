@@ -1,4 +1,6 @@
-use super::Storage;
+use std::io::{Write, Read};
+
+use super::Repository;
 
 #[derive(Debug)]
 pub(crate) struct Metadata<const SIGNATURE_SIZE: usize> {
@@ -8,17 +10,17 @@ pub(crate) struct Metadata<const SIGNATURE_SIZE: usize> {
 }
 
 impl<const SIGNATURE_SIZE: usize> Metadata<SIGNATURE_SIZE> {
-    pub fn write<'storage, S: Storage>(
+    pub fn write<'storage, Writer: Write>(
         &self,
-        storage: &'storage mut S,
+        storage: &'storage mut Writer,
     ) -> Result<(), std::io::Error> {
         storage.write_all(&self.signature)?;
         storage.write_all(self.page_size.to_ne_bytes().as_slice())?;
         storage.write_all(self.array_size.to_ne_bytes().as_slice())
     }
 
-    pub fn read<'storage, S: Storage>(
-        storage: &'storage mut S,
+    pub fn read<'storage, Reader: Read>(
+        storage: &'storage mut Reader,
     ) -> Result<Self, std::io::Error> {
         use std::mem::size_of;
 
