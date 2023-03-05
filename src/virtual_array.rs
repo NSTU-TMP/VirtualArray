@@ -58,8 +58,8 @@ impl<T: Debug + Default + Clone> VirtualArray<File, T> {
             let page = Page::<T>::new(0, count_of_elements_on_page);
 
             for i in 0..(array_size / count_of_elements_on_page + 1) {
-                let offset = Self::get_page_offset(i, page_size, count_of_elements_on_page);
-                file.seek(std::io::SeekFrom::Start(offset as u64)).unwrap();
+                file.seek_to_page(i, page_size, count_of_elements_on_page)
+                    .unwrap();
                 page.write(&mut file);
                 file.flush().unwrap();
             }
@@ -71,9 +71,6 @@ impl<T: Debug + Default + Clone> VirtualArray<File, T> {
 }
 
 impl<Storage: BufferStream, T: Debug + Default + Clone> VirtualArray<Storage, T> {
-    const VM_SIGNATURE_SIZE: usize = 2 * mem::size_of::<u8>();
-    const VM_PAGE_SIZE_VALUE: usize = mem::size_of::<usize>();
-
     pub fn new(
         mut storage: Storage,
         array_size: usize,
@@ -166,18 +163,16 @@ impl<Storage: BufferStream, T: Debug + Default + Clone> VirtualArray<Storage, T>
     }
 
     fn read_page(&mut self, page_index: usize) -> &mut Page<T> {
-        let offset =
-            Self::get_page_offset(page_index, self.page_size, self.count_of_elements_on_page);
-
         self.storage
-            .seek(std::io::SeekFrom::Start(offset as u64))
+            .seek_to_page(page_index, self.page_size, self.count_of_elements_on_page)
             .unwrap();
 
         let page = Page::read(
             page_index,
             self.count_of_elements_on_page,
             &mut self.storage,
-        ).unwrap();
+        )
+        .unwrap();
 
         let index = self.insert_page(page);
         self.pages.get_mut(index).unwrap()
@@ -230,16 +225,13 @@ impl<Storage: BufferStream, T: Debug + Default + Clone> VirtualArray<Storage, T>
         if !page.is_modified {
             return;
         }
-
-        let offset = Self::get_page_offset(
-            page.page_index,
-            self.page_size,
-            self.count_of_elements_on_page,
-        );
         self.storage
-            .seek(std::io::SeekFrom::Start(offset as u64))
+            .seek_to_page(
+                page.page_index,
+                self.page_size,
+                self.count_of_elements_on_page,
+            )
             .unwrap();
-
         page.write(&mut self.storage);
         self.storage.flush().unwrap();
     }
@@ -250,17 +242,6 @@ impl<Storage: BufferStream, T: Debug + Default + Clone> VirtualArray<Storage, T>
 
     fn get_element_index_on_page(&self, element_index: usize) -> usize {
         element_index % self.count_of_elements_on_page
-    }
-
-    fn get_page_offset(
-        page_index: usize,
-        page_size: usize,
-        count_of_elements_on_page: usize,
-    ) -> usize {
-        let value = Self::VM_SIGNATURE_SIZE
-            + Self::VM_PAGE_SIZE_VALUE
-            + page_index * (page_size + calc_bitmap_byte_size(count_of_elements_on_page));
-        value
     }
 }
 
