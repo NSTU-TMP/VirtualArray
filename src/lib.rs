@@ -1,6 +1,8 @@
 mod bitmap;
 mod page;
 mod virtual_array;
+mod builder;
+mod metadata;
 
 use std::{
     fs::File,
@@ -29,6 +31,8 @@ pub trait Storage: Read + Write + Seek {
         count_of_elements_on_page: usize,
     ) -> Result<u64, Error>;
 }
+
+type BytesCount = usize;
 
 impl Storage for File {
     fn seek_to_start(&mut self) -> Result<u64, Error> {

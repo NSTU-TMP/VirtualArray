@@ -1,37 +1,56 @@
 use std::{
     fmt::Debug,
     fs::{File, OpenOptions},
-    io::{Read, Write},
     mem::{self, size_of},
     path::Path,
 };
 
-use crate::{page::Page, Storage};
+use crate::{metadata::Metadata, page::Page, Storage};
+
+const SIGNATURE_SIZE: usize = 2;
+const SIGNATURE: [u8; SIGNATURE_SIZE] = [b'V', b'M'];
 
 #[derive(Debug)]
 pub struct VirtualArray<S: Storage, T: Debug + Default + Clone> {
     pages: Vec<Page<T>>,
-    array_size: usize,
-    page_size: usize,
+    metadata: Metadata<SIGNATURE_SIZE>,
     buffer_size: usize,
     count_of_elements_on_page: usize,
     storage: S,
 }
 
 impl<T: Debug + Default + Clone> VirtualArray<File, T> {
-    pub fn create_from_file_name(file_name: &str, array_size: usize, buffer_size: usize, desired_page_size: usize) -> Self {
-        let mut file = OpenOptions::new()
+    pub fn create_from_file_name(
+        file_name: &str,
+        array_size: usize,
+        buffer_size: usize,
+        desired_page_size: usize,
+    ) -> Self {
+        let file = OpenOptions::new()
             .create(true)
             .write(true)
             .read(true)
             .open(Path::new(file_name))
             .unwrap();
 
-        Self::create_from_file(file, array_size, buffer_size, desired_page_size)
+        Self::create(file, array_size, buffer_size, desired_page_size)
     }
 
-    pub fn create_from_file(
-        mut file: File,
+    pub fn open_from_file_name(file_name: &str, buffer_size: usize) -> Self {
+        let file = OpenOptions::new()
+            .create(false)
+            .write(true)
+            .read(true)
+            .open(Path::new(file_name))
+            .unwrap();
+
+        Self::open(file, buffer_size)
+    }
+}
+
+impl<S: Storage, T: Debug + Default + Clone> VirtualArray<S, T> {
+    pub fn create(
+        mut storage: S,
         array_size: usize,
         buffer_size: usize,
         desired_page_size: usize,
@@ -40,99 +59,63 @@ impl<T: Debug + Default + Clone> VirtualArray<File, T> {
 
         let count_of_elements_on_page = Self::count_elements_on_page(page_size);
 
-        file.seek_to_start().unwrap();
-        file.write_all(b"VM").unwrap();
+        storage.seek_to_start().unwrap();
 
-        file.write_all(&page_size.to_be_bytes()).unwrap();
+        let metadata = Metadata {
+            array_size,
+            signature: SIGNATURE,
+            page_size,
+        };
+
+        metadata.write(&mut storage).unwrap();
+        storage.flush();
 
         let page = Page::<T>::new(0, count_of_elements_on_page);
 
         for i in 0..(array_size / count_of_elements_on_page + 1) {
-            file.seek_to_page(i, page_size, count_of_elements_on_page)
+            storage
+                .seek_to_page(i, page_size, count_of_elements_on_page)
                 .unwrap();
-            page.write(&mut file);
-            file.flush().unwrap();
+            page.write(&mut storage);
+            storage.flush().unwrap();
         }
-        file.flush().unwrap();
+        storage.flush().unwrap();
 
         Self {
-            storage: file,
+            storage,
             buffer_size,
-            array_size,
+            metadata,
             pages: Vec::with_capacity(buffer_size),
-            page_size,
             count_of_elements_on_page,
         }
     }
 
-    pub fn open_from_file_name(file_name: &str, array_size: usize, buffer_size: usize) -> Self {
-        let file = OpenOptions::new()
-            .create(false)
-            .write(true)
-            .read(true)
-            .open(Path::new(file_name))
-            .unwrap();
+    pub fn open(mut storage: S, buffer_size: usize) -> Self {
+        storage.seek_to_start().unwrap();
 
+        let metadata = Metadata::read(&mut storage).unwrap();
 
-        Self::open_from_file(file, array_size, buffer_size)
-    }
-
-    pub fn open_from_file(mut file: File, array_size: usize, buffer_size: usize) -> Self {
-        file.seek_to_start().unwrap();
-        let mut vm_buff = [0u8; 2];
-        file.read_exact(&mut vm_buff).unwrap();
-
-        if b"VM" != &vm_buff {
-            panic!("File should start with VM signature");
-        }
-
-        let mut size_buff = [0u8; size_of::<usize>()];
-        file.read_exact(&mut size_buff).unwrap();
-
-        let page_size = usize::from_be_bytes(size_buff);
-        let count_of_elements_on_page = Self::count_elements_on_page(page_size);
+        // let mut vm_buff = [0u8; 2];
+        // storage.read_exact(&mut vm_buff).unwrap();
+        //
+        // if b"VM" != &vm_buff {
+        //     panic!("File should start with VM signature");
+        // }
+        //
+        // let mut size_buff = [0u8; size_of::<usize>()];
+        // storage.read_exact(&mut size_buff).unwrap();
+        //
+        // let page_size = usize::from_be_bytes(size_buff);
+        let count_of_elements_on_page = Self::count_elements_on_page(metadata.page_size);
 
         Self {
-            storage: file,
+            storage,
             buffer_size,
-            array_size,
+            metadata,
             pages: Vec::with_capacity(buffer_size),
-            page_size,
             count_of_elements_on_page,
         }
     }
-}
-
-impl<S: Storage, T: Debug + Default + Clone> VirtualArray<S, T> {
-    // pub fn new(
-    //     mut storage: S,
-    //     array_size: usize,
-    //     buffer_size: usize,
-    //     desired_page_size: usize,
-    // ) -> Option<Self> {
-    //     let page_size = Self::count_page_size(desired_page_size);
-    //
-    //     let count_of_elements_on_page = Self::count_elements_on_page(page_size);
-    //
-    //     storage.seek_to_start().unwrap();
-    //
-    //     let mut buf: [u8; 2] = [0, 0];
-    //
-    //     if let Err(_) = storage.read_exact(&mut buf) {
-    //         None
-    //     } else if buf[0] != 'V' as u8 || buf[1] != 'M' as u8 {
-    //         None
-    //     } else {
-    //         Some(Self {
-    //             storage,
-    //             buffer_size,
-    //             array_size,
-    //             pages: Vec::with_capacity(buffer_size),
-    //             page_size,
-    //             count_of_elements_on_page,
-    //         })
-    //     }
-    // }
 
     fn count_page_size(desired_page_size: usize) -> usize {
         if desired_page_size % mem::size_of::<T>() == 0 {
@@ -147,7 +130,7 @@ impl<S: Storage, T: Debug + Default + Clone> VirtualArray<S, T> {
     }
 
     pub fn set_element(&mut self, element_index: usize, value: T) {
-        debug_assert!(element_index < self.array_size);
+        debug_assert!(element_index < self.metadata.array_size);
 
         let page_index = self.get_page_index_by_element_index(element_index);
 
@@ -159,7 +142,7 @@ impl<S: Storage, T: Debug + Default + Clone> VirtualArray<S, T> {
     }
 
     pub fn get_element(&mut self, element_index: usize) -> Option<&T> {
-        debug_assert!(element_index < self.array_size);
+        debug_assert!(element_index < self.metadata.array_size);
 
         let element_index_on_page = self.get_element_index_on_page(element_index);
         let page_index = self.get_page_index_by_element_index(element_index);
@@ -169,7 +152,7 @@ impl<S: Storage, T: Debug + Default + Clone> VirtualArray<S, T> {
     }
 
     pub fn remove_element(&mut self, element_index: usize) {
-        debug_assert!(element_index < self.array_size);
+        debug_assert!(element_index < self.metadata.array_size);
 
         let page_index = self.get_page_index_by_element_index(element_index);
         let element_index_on_page = self.get_element_index_on_page(element_index);
@@ -197,7 +180,11 @@ impl<S: Storage, T: Debug + Default + Clone> VirtualArray<S, T> {
 
     fn read_page(&mut self, page_index: usize) -> &mut Page<T> {
         self.storage
-            .seek_to_page(page_index, self.page_size, self.count_of_elements_on_page)
+            .seek_to_page(
+                page_index,
+                self.metadata.page_size,
+                self.count_of_elements_on_page,
+            )
             .unwrap();
 
         let page = Page::read(
@@ -261,7 +248,7 @@ impl<S: Storage, T: Debug + Default + Clone> VirtualArray<S, T> {
         self.storage
             .seek_to_page(
                 page.page_index,
-                self.page_size,
+                self.metadata.page_size,
                 self.count_of_elements_on_page,
             )
             .unwrap();

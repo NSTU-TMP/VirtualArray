@@ -35,7 +35,7 @@ fn main() {
 
     {
         let mut va: VirtualArray<std::fs::File, Test> =
-            VirtualArray::open_from_file_name("test_add_with_struct.bin", 3, 1);
+            VirtualArray::open_from_file_name("test_add_with_struct.bin", 1);
 
         assert_eq!(va.get_element(0), Some(&test_struct_1));
         assert_eq!(va.get_element(1), Some(&test_struct_2));
