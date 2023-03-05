@@ -1,4 +1,4 @@
-use crate::Storage;
+use super::Storage;
 
 #[derive(Debug)]
 pub(crate) struct Metadata<const SIGNATURE_SIZE: usize> {
@@ -39,5 +39,9 @@ impl<const SIGNATURE_SIZE: usize> Metadata<SIGNATURE_SIZE> {
             page_size,
             array_size,
         })
+    }
+
+    pub fn count_elements_on_page<T>(&self) -> usize {
+        self.page_size / std::mem::size_of::<T>()
     }
 }

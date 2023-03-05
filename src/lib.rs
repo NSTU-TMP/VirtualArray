@@ -1,8 +1,6 @@
 mod bitmap;
 mod page;
 mod virtual_array;
-mod builder;
-mod metadata;
 
 use std::{
     fs::File,
@@ -13,7 +11,7 @@ use std::{
 
 use bitmap::calc_bitmap_byte_size;
 
-pub use crate::virtual_array::VirtualArray;
+pub use crate::virtual_array::{VirtualArray, VirtualArrayBuilder};
 
 pub trait Storage: Read + Write + Seek {
     fn get_page_offset(
@@ -31,8 +29,6 @@ pub trait Storage: Read + Write + Seek {
         count_of_elements_on_page: usize,
     ) -> Result<u64, Error>;
 }
-
-type BytesCount = usize;
 
 impl Storage for File {
     fn seek_to_start(&mut self) -> Result<u64, Error> {

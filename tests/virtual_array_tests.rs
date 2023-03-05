@@ -1,119 +1,156 @@
-use std::fs::remove_file;
-use virtual_array::VirtualArray;
+use virtual_array::VirtualArrayBuilder;
 
 #[derive(Debug, Default, PartialEq, Clone, Copy)]
 struct Test {
-    name: u8,
-    surname: u8,
+    field_1: u8,
+    field_2: u8,
 }
 
-//#[test]
-fn float_test() {
-    let mut va: VirtualArray<std::fs::File, f64> =
-        VirtualArray::create_from_file_name("float_tets.bin", 100000000, 3, 512);
-    va.set_element(0, 1.0);
-    va.set_element(13, 2.0);
-    va.set_element(0, 3.0);
-    va.set_element(512, 4.0);
-    va.set_element(1024, 5.0);
-    va.set_element(2048, 6.0);
-    va.set_element(99999999, 6.0);
-    va.remove_element(1024);
-
-    assert_eq!(Some(&3.0), va.get_element(0));
-    assert_eq!(Some(&4.0), va.get_element(512));
-    assert_eq!(Some(&6.0), va.get_element(2048));
+fn remove_file(file_name: &str) {
+    use std::fs::remove_file;
+    if std::path::Path::new(file_name).exists() {
+        remove_file(file_name).unwrap();
+    }
 }
 
 #[test]
-fn tet_add_with_struct() {
-    let test_struct_1 = Test {
-        name: 5,
-        surname: 3,
-    };
-
-    let test_struct_2 = Test {
-        name: 11,
-        surname: 16,
-    };
-
-    #[deny(unused_must_use, unused, unused_results)]
-    remove_file("test_add_with_struct.bin");
+fn test_with_float_items() {
+    const FILE_NAME: &str = "test_with_float_items.bin";
+    remove_file(FILE_NAME);
 
     {
-        let mut va: VirtualArray<std::fs::File, Test> =
-            VirtualArray::create_from_file_name("test_add_with_struct.bin", 9, 1, 18);
-        for i in 0..9 {
-            va.set_element(
-                i,
-                if i % 2 == 0 {
-                    test_struct_1
-                } else {
-                    test_struct_2
-                },
-            );
+        let mut va = VirtualArrayBuilder::new()
+            .file_name(FILE_NAME)
+            .buffer_size(3)
+            .array_size(100000000)
+            .desired_page_size(512)
+            .create::<f32>();
+
+        va.set_element(0, 1.0);
+        va.set_element(13, 2.0);
+        va.set_element(0, 3.0);
+        va.set_element(512, 4.0);
+        va.set_element(1024, 5.0);
+        va.set_element(2048, 6.0);
+        va.set_element(99999999, 7.0);
+    }
+
+    {
+        let mut va = VirtualArrayBuilder::new()
+            .file_name(FILE_NAME)
+            .buffer_size(3)
+            .open::<f32>();
+
+        va.remove_element(1024);
+    }
+
+    {
+        let mut va = VirtualArrayBuilder::new()
+            .file_name(FILE_NAME)
+            .buffer_size(3)
+            .open::<f32>();
+
+        assert_eq!(Some(&3.0), va.get_element(0));
+        assert_eq!(Some(&2.0), va.get_element(13));
+        assert_eq!(Some(&4.0), va.get_element(512));
+        assert_eq!(None, va.get_element(1024));
+        assert_eq!(Some(&6.0), va.get_element(2048));
+        assert_eq!(Some(&7.0), va.get_element(99999999));
+    }
+}
+
+#[test]
+fn test_with_struct_items() {
+    const FILE_NAME: &str = "test_with_struct_items.bin";
+    remove_file(FILE_NAME);
+
+    let value_1 = Test {
+        field_1: 5,
+        field_2: 3,
+    };
+
+    let value_2 = Test {
+        field_1: 11,
+        field_2: 16,
+    };
+
+    {
+        let mut va = VirtualArrayBuilder::new()
+            .file_name(FILE_NAME)
+            .buffer_size(1)
+            .array_size(10)
+            .desired_page_size(18)
+            .create::<Test>();
+
+        for i in 0..10 {
+            va.set_element(i, if i % 2 == 0 { value_1 } else { value_2 });
         }
     }
 
     {
-        let mut va: VirtualArray<std::fs::File, Test> =
-            VirtualArray::open_from_file_name("test_add_with_struct.bin", 1);
+        let mut va = VirtualArrayBuilder::new()
+            .file_name(FILE_NAME)
+            .buffer_size(1)
+            .open::<Test>();
 
-        for i in 0..9 {
+        va.set_element(0, value_2);
+        va.remove_element(9);
+    }
+
+    {
+        let mut va = VirtualArrayBuilder::new()
+            .file_name(FILE_NAME)
+            .buffer_size(1)
+            .open::<Test>();
+
+        assert_eq!(va.get_element(0), Some(&value_2));
+        assert_eq!(va.get_element(9), None);
+
+        for i in 1..9 {
             assert_eq!(
                 va.get_element(i),
-                Some(&if i % 2 == 0 {
-                    test_struct_1
-                } else {
-                    test_struct_2
-                })
+                Some(&if i % 2 == 0 { value_1 } else { value_2 })
             );
         }
     }
 }
 
 #[test]
-fn test_add() {
-    #[deny(unused_must_use, unused, unused_results)]
-    remove_file("test_add.bin");
+fn test_with_u8_items() {
+    const FILE_NAME: &str = "test_with_u8_items.bin";
+    remove_file(FILE_NAME);
 
     {
-        let mut va: VirtualArray<std::fs::File, u8> =
-            VirtualArray::create_from_file_name("test_add.bin", 40, 1000, 20);
+        let mut va = VirtualArrayBuilder::new()
+            .file_name(FILE_NAME)
+            .buffer_size(1000)
+            .array_size(40)
+            .desired_page_size(20)
+            .create::<u8>();
+
         va.set_element(0, 123);
         va.set_element(35, 99);
+        va.set_element(39, 11);
     }
 
     {
-        let mut va: VirtualArray<std::fs::File, u8> =
-            VirtualArray::open_from_file_name("test_add.bin", 1000);
+        let mut va = VirtualArrayBuilder::new()
+            .file_name(FILE_NAME)
+            .buffer_size(1000)
+            .open::<u8>();
+
+        va.remove_element(35);
+        va.set_element(39, 15);
+    }
+
+    {
+        let mut va = VirtualArrayBuilder::new()
+            .file_name(FILE_NAME)
+            .buffer_size(1000)
+            .open::<u8>();
+
         assert_eq!(va.get_element(0), Some(&123));
-        assert_eq!(va.get_element(35), Some(&99));
-    }
-}
-
-#[test]
-fn test_remove() {
-    #[deny(unused_must_use, unused, unused_results)]
-    remove_file("test_remove.bin");
-
-    {
-        let mut va: VirtualArray<std::fs::File, u8> =
-            VirtualArray::create_from_file_name("test_remove.bin", 20, 1, 20);
-        va.set_element(0, 123);
-    }
-
-    {
-        let mut va: VirtualArray<std::fs::File, u8> =
-            VirtualArray::open_from_file_name("test_remove.bin", 1);
-        va.remove_element(0);
-        va.remove_element(1);
-    }
-
-    {
-        let mut va: VirtualArray<std::fs::File, u8> =
-            VirtualArray::open_from_file_name("test_remove.bin", 1);
-        assert_eq!(va.get_element(0), None);
-        assert_eq!(va.get_element(1), None);
+        assert_eq!(va.get_element(35), None);
+        assert_eq!(va.get_element(39), Some(&15));
     }
 }

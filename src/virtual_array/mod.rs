@@ -1,122 +1,28 @@
+mod builder;
+mod metadata;
+
 use std::{
     fmt::Debug,
-    fs::{File, OpenOptions},
-    mem::{self, size_of},
-    path::Path,
+    mem,
 };
+use crate::{page::Page, Storage};
+use metadata::Metadata;
 
-use crate::{metadata::Metadata, page::Page, Storage};
+pub use builder::VirtualArrayBuilder;
 
-const SIGNATURE_SIZE: usize = 2;
-const SIGNATURE: [u8; SIGNATURE_SIZE] = [b'V', b'M'];
+const DEFAULT_SIGNATURE_SIZE: usize = 2;
+const DEFAULT_SIGNATURE: [u8; DEFAULT_SIGNATURE_SIZE] = [b'V', b'M'];
 
 #[derive(Debug)]
-pub struct VirtualArray<S: Storage, T: Debug + Default + Clone> {
-    pages: Vec<Page<T>>,
-    metadata: Metadata<SIGNATURE_SIZE>,
-    buffer_size: usize,
-    count_of_elements_on_page: usize,
-    storage: S,
+pub struct VirtualArray<const SIGNATURE_SIZE: usize, S: Storage, T: Debug + Default + Clone> {
+    pub(in crate::virtual_array) pages: Vec<Page<T>>,
+    pub(in crate::virtual_array) metadata: Metadata<SIGNATURE_SIZE>,
+    pub(in crate::virtual_array) buffer_size: usize,
+    pub(in crate::virtual_array) count_of_elements_on_page: usize,
+    pub(in crate::virtual_array) storage: S,
 }
 
-impl<T: Debug + Default + Clone> VirtualArray<File, T> {
-    pub fn create_from_file_name(
-        file_name: &str,
-        array_size: usize,
-        buffer_size: usize,
-        desired_page_size: usize,
-    ) -> Self {
-        let file = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .read(true)
-            .open(Path::new(file_name))
-            .unwrap();
-
-        Self::create(file, array_size, buffer_size, desired_page_size)
-    }
-
-    pub fn open_from_file_name(file_name: &str, buffer_size: usize) -> Self {
-        let file = OpenOptions::new()
-            .create(false)
-            .write(true)
-            .read(true)
-            .open(Path::new(file_name))
-            .unwrap();
-
-        Self::open(file, buffer_size)
-    }
-}
-
-impl<S: Storage, T: Debug + Default + Clone> VirtualArray<S, T> {
-    pub fn create(
-        mut storage: S,
-        array_size: usize,
-        buffer_size: usize,
-        desired_page_size: usize,
-    ) -> Self {
-        let page_size = Self::count_page_size(desired_page_size);
-
-        let count_of_elements_on_page = Self::count_elements_on_page(page_size);
-
-        storage.seek_to_start().unwrap();
-
-        let metadata = Metadata {
-            array_size,
-            signature: SIGNATURE,
-            page_size,
-        };
-
-        metadata.write(&mut storage).unwrap();
-        storage.flush();
-
-        let page = Page::<T>::new(0, count_of_elements_on_page);
-
-        for i in 0..(array_size / count_of_elements_on_page + 1) {
-            storage
-                .seek_to_page(i, page_size, count_of_elements_on_page)
-                .unwrap();
-            page.write(&mut storage);
-            storage.flush().unwrap();
-        }
-        storage.flush().unwrap();
-
-        Self {
-            storage,
-            buffer_size,
-            metadata,
-            pages: Vec::with_capacity(buffer_size),
-            count_of_elements_on_page,
-        }
-    }
-
-    pub fn open(mut storage: S, buffer_size: usize) -> Self {
-        storage.seek_to_start().unwrap();
-
-        let metadata = Metadata::read(&mut storage).unwrap();
-
-        // let mut vm_buff = [0u8; 2];
-        // storage.read_exact(&mut vm_buff).unwrap();
-        //
-        // if b"VM" != &vm_buff {
-        //     panic!("File should start with VM signature");
-        // }
-        //
-        // let mut size_buff = [0u8; size_of::<usize>()];
-        // storage.read_exact(&mut size_buff).unwrap();
-        //
-        // let page_size = usize::from_be_bytes(size_buff);
-        let count_of_elements_on_page = Self::count_elements_on_page(metadata.page_size);
-
-        Self {
-            storage,
-            buffer_size,
-            metadata,
-            pages: Vec::with_capacity(buffer_size),
-            count_of_elements_on_page,
-        }
-    }
-
+impl<const SIGNATURE_SIZE: usize, S: Storage, T: Debug + Default + Clone> VirtualArray<SIGNATURE_SIZE, S, T> {
     fn count_page_size(desired_page_size: usize) -> usize {
         if desired_page_size % mem::size_of::<T>() == 0 {
             desired_page_size
@@ -265,7 +171,7 @@ impl<S: Storage, T: Debug + Default + Clone> VirtualArray<S, T> {
     }
 }
 
-impl<S: Storage, T: Debug + Default + Clone> Drop for VirtualArray<S, T> {
+impl<const SIGNATURE_SIZE: usize, S: Storage, T: Debug + Default + Clone> Drop for VirtualArray<SIGNATURE_SIZE, S, T> {
     fn drop(&mut self) {
         for i in 0..self.pages.len() {
             self.save_page(i);
