@@ -6,100 +6,133 @@ use std::{
     path::Path,
 };
 
-use crate::{page::Page, BufferStream};
+use crate::{page::Page, Storage};
 
 #[derive(Debug)]
-pub struct VirtualArray<Storage: BufferStream, T: Debug + Default + Clone> {
+pub struct VirtualArray<S: Storage, T: Debug + Default + Clone> {
     pages: Vec<Page<T>>,
     array_size: usize,
     page_size: usize,
     buffer_size: usize,
     count_of_elements_on_page: usize,
-    storage: Storage,
+    storage: S,
 }
 
 impl<T: Debug + Default + Clone> VirtualArray<File, T> {
-    pub fn from_file_name<'file_name>(
-        file_name: &'file_name str,
-        array_size: usize,
-        buffer_size: usize,
-        desired_page_size: usize,
-    ) -> Option<Self> {
-        let is_exist = Path::new(file_name).exists();
+    pub fn create_from_file_name(file_name: &str, array_size: usize, buffer_size: usize, desired_page_size: usize) -> Self {
         let mut file = OpenOptions::new()
             .create(true)
             .write(true)
             .read(true)
             .open(Path::new(file_name))
             .unwrap();
-        let mut page_size = Self::count_page_size(desired_page_size);
 
-        if is_exist {
-            file.seek_to_start().unwrap();
-            let mut vm_buff = [0u8; 2];
-            file.read_exact(&mut vm_buff).unwrap();
-
-            if b"VM" != &vm_buff {
-                panic!("File should start with VM signature");
-            }
-
-            let mut size_buff = [0u8; size_of::<usize>()];
-            file.read_exact(&mut size_buff).unwrap();
-
-            page_size = usize::from_be_bytes(size_buff);
-        } else {
-            let count_of_elements_on_page = Self::count_elements_on_page(page_size);
-
-            file.seek_to_start().unwrap();
-            file.write_all(b"VM").unwrap();
-
-            file.write_all(&page_size.to_be_bytes()).unwrap();
-
-            let page = Page::<T>::new(0, count_of_elements_on_page);
-
-            for i in 0..(array_size / count_of_elements_on_page + 1) {
-                file.seek_to_page(i, page_size, count_of_elements_on_page)
-                    .unwrap();
-                page.write(&mut file);
-                file.flush().unwrap();
-            }
-            file.flush().unwrap();
-        }
-
-        Self::new(file, array_size, buffer_size, page_size)
+        Self::create_from_file(file, array_size, buffer_size, desired_page_size)
     }
-}
 
-impl<Storage: BufferStream, T: Debug + Default + Clone> VirtualArray<Storage, T> {
-    pub fn new(
-        mut storage: Storage,
+    pub fn create_from_file(
+        mut file: File,
         array_size: usize,
         buffer_size: usize,
         desired_page_size: usize,
-    ) -> Option<Self> {
+    ) -> Self {
         let page_size = Self::count_page_size(desired_page_size);
 
         let count_of_elements_on_page = Self::count_elements_on_page(page_size);
 
-        storage.seek_to_start().unwrap();
+        file.seek_to_start().unwrap();
+        file.write_all(b"VM").unwrap();
 
-        let mut buf: [u8; 2] = [0, 0];
+        file.write_all(&page_size.to_be_bytes()).unwrap();
 
-        if let Err(_) = storage.read_exact(&mut buf) {
-            None
-        } else if buf[0] != 'V' as u8 || buf[1] != 'M' as u8 {
-            None
-        } else {
-            Some(Self {
-                storage,
-                buffer_size,
-                array_size,
-                pages: Vec::with_capacity(buffer_size),
-                page_size,
-                count_of_elements_on_page,
-            })
+        let page = Page::<T>::new(0, count_of_elements_on_page);
+
+        for i in 0..(array_size / count_of_elements_on_page + 1) {
+            file.seek_to_page(i, page_size, count_of_elements_on_page)
+                .unwrap();
+            page.write(&mut file);
+            file.flush().unwrap();
+        }
+        file.flush().unwrap();
+
+        Self {
+            storage: file,
+            buffer_size,
+            array_size,
+            pages: Vec::with_capacity(buffer_size),
+            page_size,
+            count_of_elements_on_page,
         }
     }
+
+    pub fn open_from_file_name(file_name: &str, array_size: usize, buffer_size: usize) -> Self {
+        let file = OpenOptions::new()
+            .create(false)
+            .write(true)
+            .read(true)
+            .open(Path::new(file_name))
+            .unwrap();
+
+
+        Self::open_from_file(file, array_size, buffer_size)
+    }
+
+    pub fn open_from_file(mut file: File, array_size: usize, buffer_size: usize) -> Self {
+        file.seek_to_start().unwrap();
+        let mut vm_buff = [0u8; 2];
+        file.read_exact(&mut vm_buff).unwrap();
+
+        if b"VM" != &vm_buff {
+            panic!("File should start with VM signature");
+        }
+
+        let mut size_buff = [0u8; size_of::<usize>()];
+        file.read_exact(&mut size_buff).unwrap();
+
+        let page_size = usize::from_be_bytes(size_buff);
+        let count_of_elements_on_page = Self::count_elements_on_page(page_size);
+
+        Self {
+            storage: file,
+            buffer_size,
+            array_size,
+            pages: Vec::with_capacity(buffer_size),
+            page_size,
+            count_of_elements_on_page,
+        }
+    }
+}
+
+impl<S: Storage, T: Debug + Default + Clone> VirtualArray<S, T> {
+    // pub fn new(
+    //     mut storage: S,
+    //     array_size: usize,
+    //     buffer_size: usize,
+    //     desired_page_size: usize,
+    // ) -> Option<Self> {
+    //     let page_size = Self::count_page_size(desired_page_size);
+    //
+    //     let count_of_elements_on_page = Self::count_elements_on_page(page_size);
+    //
+    //     storage.seek_to_start().unwrap();
+    //
+    //     let mut buf: [u8; 2] = [0, 0];
+    //
+    //     if let Err(_) = storage.read_exact(&mut buf) {
+    //         None
+    //     } else if buf[0] != 'V' as u8 || buf[1] != 'M' as u8 {
+    //         None
+    //     } else {
+    //         Some(Self {
+    //             storage,
+    //             buffer_size,
+    //             array_size,
+    //             pages: Vec::with_capacity(buffer_size),
+    //             page_size,
+    //             count_of_elements_on_page,
+    //         })
+    //     }
+    // }
 
     fn count_page_size(desired_page_size: usize) -> usize {
         if desired_page_size % mem::size_of::<T>() == 0 {
@@ -245,7 +278,7 @@ impl<Storage: BufferStream, T: Debug + Default + Clone> VirtualArray<Storage, T>
     }
 }
 
-impl<Storage: BufferStream, T: Debug + Default + Clone> Drop for VirtualArray<Storage, T> {
+impl<S: Storage, T: Debug + Default + Clone> Drop for VirtualArray<S, T> {
     fn drop(&mut self) {
         for i in 0..self.pages.len() {
             self.save_page(i);
