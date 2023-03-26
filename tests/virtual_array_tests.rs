@@ -1,11 +1,5 @@
 use virtual_array::VirtualArrayBuilder;
 
-#[derive(Debug, Default, PartialEq, Clone, Copy)]
-struct Test {
-    field_1: u8,
-    field_2: u8,
-}
-
 fn remove_file(file_name: &str) {
     use std::fs::remove_file;
     if std::path::Path::new(file_name).exists() {
@@ -22,40 +16,41 @@ fn test_with_float_items() {
         let mut va = VirtualArrayBuilder::from_file_name(FILE_NAME)
             .item_type::<f32>()
             .buffer_size(3)
-            .array_size(100000000)
-            .desired_page_size(512)
-            .create();
+            .create(100000000, 512)
+            .unwrap();
 
-        va.set_element(0, 1.0);
-        va.set_element(13, 2.0);
-        va.set_element(0, 3.0);
-        va.set_element(512, 4.0);
-        va.set_element(1024, 5.0);
-        va.set_element(2048, 6.0);
-        va.set_element(99999999, 7.0);
+        va.set(0, 1.0).unwrap();
+        va.set(13, 2.0).unwrap();
+        va.set(0, 3.0).unwrap();
+        va.set(512, 4.0).unwrap();
+        va.set(1024, 5.0).unwrap();
+        va.set(2048, 6.0).unwrap();
+        va.set(99999999, 7.0).unwrap();
     }
 
     {
         let mut va = VirtualArrayBuilder::from_file_name(FILE_NAME)
             .item_type::<f32>()
             .buffer_size(3)
-            .open();
+            .open()
+            .unwrap();
 
-        va.remove_element(1024);
+        va.delete(1024).unwrap();
     }
 
     {
         let mut va = VirtualArrayBuilder::from_file_name(FILE_NAME)
             .item_type::<f32>()
             .buffer_size(3)
-            .open();
+            .open()
+            .unwrap();
 
-        assert_eq!(Some(&3.0), va.get_element(0));
-        assert_eq!(Some(&2.0), va.get_element(13));
-        assert_eq!(Some(&4.0), va.get_element(512));
-        assert_eq!(None, va.get_element(1024));
-        assert_eq!(Some(&6.0), va.get_element(2048));
-        assert_eq!(Some(&7.0), va.get_element(99999999));
+        assert_eq!(Some(&3.0), va.get(0).unwrap());
+        assert_eq!(Some(&2.0), va.get(13).unwrap());
+        assert_eq!(Some(&4.0), va.get(512).unwrap());
+        assert_eq!(None, va.get(1024).unwrap());
+        assert_eq!(Some(&6.0), va.get(2048).unwrap());
+        assert_eq!(Some(&7.0), va.get(99999999).unwrap());
     }
 }
 
@@ -63,6 +58,12 @@ fn test_with_float_items() {
 fn test_with_struct_items() {
     const FILE_NAME: &str = "test_with_struct_items.bin";
     remove_file(FILE_NAME);
+
+    #[derive(Debug, Default, PartialEq, Clone, Copy)]
+    struct Test {
+        field_1: u8,
+        field_2: u8,
+    }
 
     let value_1 = Test {
         field_1: 5,
@@ -78,12 +79,12 @@ fn test_with_struct_items() {
         let mut va = VirtualArrayBuilder::from_file_name(FILE_NAME)
             .item_type::<Test>()
             .buffer_size(1)
-            .array_size(10)
-            .desired_page_size(18)
-            .create();
+            .create(10, 18)
+            .unwrap();
 
         for i in 0..10 {
-            va.set_element(i, if i % 2 == 0 { value_1 } else { value_2 });
+            va.set(i, if i % 2 == 0 { value_1 } else { value_2 })
+                .unwrap();
         }
     }
 
@@ -91,24 +92,26 @@ fn test_with_struct_items() {
         let mut va = VirtualArrayBuilder::from_file_name(FILE_NAME)
             .item_type::<Test>()
             .buffer_size(1)
-            .open();
+            .open()
+            .unwrap();
 
-        va.set_element(0, value_2);
-        va.remove_element(9);
+        va.set(0, value_2).unwrap();
+        va.delete(9).unwrap();
     }
 
     {
         let mut va = VirtualArrayBuilder::from_file_name(FILE_NAME)
             .item_type::<Test>()
             .buffer_size(1)
-            .open();
+            .open()
+            .unwrap();
 
-        assert_eq!(va.get_element(0), Some(&value_2));
-        assert_eq!(va.get_element(9), None);
+        assert_eq!(va.get(0).unwrap(), Some(&value_2));
+        assert_eq!(va.get(9).unwrap(), None);
 
         for i in 1..9 {
             assert_eq!(
-                va.get_element(i),
+                va.get(i).unwrap(),
                 Some(&if i % 2 == 0 { value_1 } else { value_2 })
             );
         }
@@ -124,33 +127,36 @@ fn test_with_u8_items() {
         let mut va = VirtualArrayBuilder::from_file_name(FILE_NAME)
             .item_type::<u8>()
             .buffer_size(10)
-            .array_size(40)
-            .desired_page_size(20)
-            .create();
+            .create(40, 20)
+            .unwrap();
 
-        va.set_element(0, 123);
-        va.set_element(35, 99);
-        va.set_element(39, 11);
+        va.set(0, 123).unwrap();
+        va.set(7, 123).unwrap();
+        va.set(35, 99).unwrap();
+        va.set(38, 1).unwrap();
     }
 
     {
         let mut va = VirtualArrayBuilder::from_file_name(FILE_NAME)
             .item_type::<u8>()
             .buffer_size(10)
-            .open();
+            .open()
+            .unwrap();
 
-        va.remove_element(35);
-        va.set_element(39, 15);
+        va.delete(35).unwrap();
+        va.set(38, 15).unwrap();
     }
 
     {
         let mut va = VirtualArrayBuilder::from_file_name(FILE_NAME)
             .item_type::<u8>()
             .buffer_size(10)
-            .open();
+            .open()
+            .unwrap();
 
-        assert_eq!(va.get_element(0), Some(&123));
-        assert_eq!(va.get_element(35), None);
-        assert_eq!(va.get_element(39), Some(&15));
+        assert_eq!(va.get(0).unwrap(), Some(&123));
+        assert_eq!(va.get(7).unwrap(), Some(&123));
+        assert_eq!(va.get(35).unwrap(), None);
+        assert_eq!(va.get(38).unwrap(), Some(&15));
     }
 }

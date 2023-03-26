@@ -1,95 +1,100 @@
-mod reader_writer;
+mod bitmap;
+mod data_chunk;
+mod serializer;
 
-use std::{fmt::Debug, time::SystemTime};
+pub use self::{bitmap::Bitmap, data_chunk::DataChunk, serializer::*};
 
-use crate::bitmap::{Bitmap, BitmapReaderWriter};
-pub use reader_writer::{DefaultPageReaderWriter, PageReaderWriter};
+use std::{error::Error, fmt::Display, time::SystemTime};
 
 #[derive(Debug)]
-pub struct Page<Item>
-where
-    Item: Debug + Default + Clone,
-{
-    bitmap: Bitmap,
-    data: Vec<Item>,
-    pub(crate) handling_time: SystemTime,
-    pub(crate) is_modified: bool,
-    elements_count_on_page: usize,
-    pub(crate) page_index: usize,
+pub struct Page<Item> {
+    pub bitmap: Bitmap,
+    pub data_chunk: DataChunk<Item>,
+    pub(crate) index: usize,
+    handling_time: SystemTime,
+    is_modified: bool,
 }
 
-impl<Item> Page<Item>
-where
-    Item: Debug + Default + Clone,
-{
-    pub fn zeroed(page_index: usize, elements_count_on_page: usize) -> Self {
-        let data = vec![Item::default(); elements_count_on_page];
+#[derive(Debug)]
+pub enum PageError {
+    BitmapTooSmall {
+        bitmap_size: usize,
+        number_of_items: usize,
+    },
+}
 
-        debug_assert_eq!(elements_count_on_page, data.len());
+type PageResult<T> = Result<T, PageError>;
 
-        Self {
-            page_index,
-            elements_count_on_page,
-            bitmap: Bitmap::zeroed(elements_count_on_page),
-            data,
-            handling_time: SystemTime::now(),
-            is_modified: false,
+impl<Item> Page<Item> {
+    pub fn new(index: usize, bitmap: Bitmap, data_chunk: DataChunk<Item>) -> PageResult<Self> {
+        if Bitmap::calc_bitmap_size(data_chunk.as_ref().len()) != bitmap.as_ref().len() {
+            return Err(PageError::BitmapTooSmall {
+                bitmap_size: bitmap.as_ref().len(),
+                number_of_items: data_chunk.as_ref().len(),
+            });
         }
-    }
-    pub fn new(
-        page_index: usize,
-        elements_count_on_page: usize,
-        bitmap: Bitmap,
-        data: Vec<Item>,
-    ) -> Self {
-        debug_assert_eq!(elements_count_on_page, data.len());
 
-        Self {
-            page_index,
-            elements_count_on_page,
+        Ok(Self {
             bitmap,
-            data,
+            data_chunk,
             handling_time: SystemTime::now(),
             is_modified: false,
-        }
+            index,
+        })
     }
 
-    pub fn as_ptr(&self) -> *const Item {
-        self.data.as_ptr()
-    }
-
-    pub fn len(&self) -> usize {
-        self.elements_count_on_page
-    }
-
-    pub fn bitmap(&self) -> &Bitmap {
-        &self.bitmap
-    }
-
-    pub fn set(&mut self, index_on_page: usize, value: Item) {
-        debug_assert!(index_on_page < self.elements_count_on_page);
+    pub(crate) fn set(&mut self, index: usize, value: Item) {
         self.is_modified = true;
         self.handling_time = SystemTime::now();
 
-        self.data[index_on_page] = value;
-        self.bitmap.set(index_on_page);
+        self.data_chunk.set(index, value);
+        self.bitmap.set(index, true);
     }
 
-    pub fn get(&self, index_on_page: usize) -> Option<&Item> {
-        debug_assert!(index_on_page < self.elements_count_on_page);
-
-        if !self.bitmap.get(index_on_page) {
-            return None;
+    pub(crate) fn get(&self, index: usize) -> Option<&Item> {
+        if !self.bitmap.get(index) {
+            None
+        } else {
+            Some(self.data_chunk.get(index))
         }
-
-        self.data.get(index_on_page)
     }
 
-    pub fn remove(&mut self, index_on_page: usize) {
-        debug_assert!(index_on_page < self.elements_count_on_page);
-
+    pub(crate) fn delete(&mut self, index: usize) {
         self.is_modified = true;
         self.handling_time = SystemTime::now();
-        self.bitmap.unset(index_on_page);
+        self.bitmap.set(index, false);
+    }
+
+    pub(crate) fn cmp_priorities(&self, other: &Page<Item>) -> std::cmp::Ordering {
+        self.handling_time.cmp(&other.handling_time)
+    }
+
+    pub(crate) fn should_be_saved(&self) -> bool {
+        self.is_modified
+    }
+}
+
+impl Display for PageError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::BitmapTooSmall {
+                bitmap_size,
+                number_of_items: size_of_items,
+            } => write!(
+                f,
+                "bitmap ({} bytes or {} flags) is too small for {} items",
+                bitmap_size,
+                8 * bitmap_size,
+                size_of_items
+            ),
+        }
+    }
+}
+
+impl Error for PageError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::BitmapTooSmall { .. } => None,
+        }
     }
 }
